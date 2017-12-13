@@ -11,8 +11,10 @@
 // ==/UserScript==
 
 //Test issue - FBLI-7870
-const jiraRestApiUrl = 'https://jira.unicorn.eu/rest/api/2/';
-const jiraRestApiUrlIssue = jiraRestApiUrl + 'issue/';
+const jiraUrl = 'https://jira.unicorn.eu';
+const jiraBrowseIssue = jiraUrl + "/browse";
+const jiraRestApiUrl = jiraUrl + '/rest/api/2';
+const jiraRestApiUrlIssue = jiraRestApiUrl + '/issue';
 const jiraIssueKeyPattern = /([A-Z]+-\d+)/;
 
 //Check that the worklog page is loaded by querying for some expected elements
@@ -32,12 +34,12 @@ if (!$formBody.length) {
 $formBody.append(
 	"<div class=\"vcFormItem vcFormItemShow\">\n" +
 	"    <div class=\"vcSpanNormalLeftInline\">\n" +
-	"        <div class=\"LabelBlock\"><label>Issue</label></div>\n" +
+	"        <div class=\"LabelBlock\"><label>Jira issue</label></div>\n" +
 	"        <div class=\"ImageBlock\"><img class=\"vcImageFormNoItemHelp\"\n" +
 	"                                     src=\"https://cdn-legacy.plus4u.net/uu-os8-ui/gui_257/ie_5.5/ues/images/other/form_nothing.gif\" alt=\"\"></div>\n" +
 	"    </div>\n" +
 	"    <div class=\"vcSpanNormalRightInline\">\n" +
-	"        <div class=\"vcInput\"><span id=\"parsedJiraIssue\" class=\"vcInput\"></div>\n" +
+	"        <div class=\"vcInput\"><span id=\"parsedJiraIssue\" class=\"vcInput\"></span></div>\n" +
 	"    </div>\n" +
 	"</div>"
 );
@@ -81,24 +83,54 @@ class WorkDescription {
 }
 
 function displayIssue(issue) {
-	console.log(issue.key, issue.fields.summary);
-	$("#parsedJiraIssue").val(`${issue.key} - ${issue.fields.summary}`);
+	$("#parsedJiraIssue").empty().append(`<a href="${jiraUrl}/${issue.key}">${issue.key} - ${issue.fields.summary}</a>`);
+}
+
+function issueLoadingFailed(responseDetail) {
+	let responseErr = responseDetail.response;
+	let key = responseDetail.key;
+	if (responseErr.status === 401) {
+		$("#parsedJiraIssue").empty().append(`Jira authentication failed. Please <a href="${jiraUrl}/${key}">log in to Jira.</a>`)
+		return
+	}
+	if (responseErr.status === 404
+		&& responseErr.responseHeaders
+		&& responseErr.responseHeaders.match(/content-type:\sapplication\/json/) != null) {
+		let error = JSON.parse(responseErr.responseText);
+		if (error.errorMessages) {
+			$("#parsedJiraIssue").empty().append(`Failed to load issue ${key}: ${error.errorMessages.join(", ")}.`);
+			return;
+		}
+	}
+	$("#parsedJiraIssue").empty().append(`Something bad happened, you may need to log your work to Jira manually.`)
 }
 
 function loadIssue(key) {
 	//todo
 
+	// noinspection JSUnusedGlobalSymbols
 	GM_xmlhttpRequest(
 		{
 			method: 'GET',
 			headers: {"Accept": "application/json"},
-			url: jiraRestApiUrlIssue + key,
+			url: jiraRestApiUrlIssue.concat("/", key),
 			onreadystatechange: function (res) {
 				console.log("Request state changed to: " + res.readyState);
 			},
-			onload: function (responseDetails) {
-				console.log(`Issue ${key} loaded.`);
-				displayIssue(JSON.parse(responseDetails.responseText));
+			onload: function (response) {
+				console.log(`Loading of issue ${key} completed.`);
+				//This does not actually mean the status was OK
+				if (response.status === 200) {
+					console.log(`Issue ${key} loaded successfully.`);
+					displayIssue(JSON.parse(response.responseText));
+				} else {
+					console.log(`Failed to load issue ${key}. Status: ${response.status}`);
+					issueLoadingFailed({key, response});
+				}
+			},
+			onerror: function (responseErr) {
+				console.log(`Failed to load issue ${key}. Status: ${responseErr.status}`);
+				issueLoadingFailed({key, response: responseErr});
 			}
 		}
 	);
