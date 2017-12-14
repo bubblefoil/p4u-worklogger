@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         p4u-worklogger
-// @namespace    https://plus4u.net/
-// @version      0.0.1
 // @description  JIRA work log in UU
+// @version      0.0.1
+// @namespace    https://plus4u.net/
 // @author       AHoj
+// @license      MIT
 // @require      https://code.jquery.com/jquery-3.2.1.min.js
 // @grant        GM_xmlhttpRequest
 // @connect      https://jira.unicorn.eu/rest
