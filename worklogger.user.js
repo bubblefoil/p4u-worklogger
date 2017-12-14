@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         UU-WorkLogger
+// @name         p4u-worklogger
 // @namespace    https://plus4u.net/
 // @version      0.0.1
-// @description  Jira work log in UU
+// @description  JIRA work log in UU
 // @author       AHoj
 // @require      https://code.jquery.com/jquery-3.2.1.min.js
 // @grant        GM_xmlhttpRequest
@@ -32,20 +32,19 @@ if (!$formBody.length) {
 
 //Add jira issue container
 $formBody.append(
-	"<div class=\"vcFormItem vcFormItemShow\">\n" +
-	"    <div class=\"vcSpanNormalLeftInline\">\n" +
-	"        <div class=\"LabelBlock\"><label>Jira issue</label></div>\n" +
-	"        <div class=\"ImageBlock\"><img class=\"vcImageFormNoItemHelp\"\n" +
-	"                                     src=\"https://cdn-legacy.plus4u.net/uu-os8-ui/gui_257/ie_5.5/ues/images/other/form_nothing.gif\" alt=\"\"></div>\n" +
-	"    </div>\n" +
-	"    <div class=\"vcSpanNormalRightInline\">\n" +
-	"        <div class=\"vcInput\"><span id=\"parsedJiraIssue\" class=\"vcInput\"></span></div>\n" +
-	"    </div>\n" +
-	"</div>"
+	`<div class="vcFormItem vcFormItemShow">
+    <div class="vcSpanNormalLeftInline">
+        <div class="LabelBlock"><label>JIRA issue</label></div>
+        <span style="background: url(../webui/images/infotip.gif) center bottom no-repeat"></span>
+    </div>
+    <div class="vcSpanNormalRightInline">
+        <div><span id="parsedJiraIssue"></span></div>
+    </div>
+</div>`
 );
 
 /**
- * Container for a Jira issue key + description. It can construct itself by parsing the issue key from work description.
+ * Container for a JIRA issue key + description. It can construct itself by parsing the issue key from work description.
  */
 class WorkDescription {
 
@@ -82,15 +81,23 @@ class WorkDescription {
 	}
 }
 
-function displayIssue(issue) {
-	$("#parsedJiraIssue").empty().append(`<a href="${jiraUrl}/${issue.key}">${issue.key} - ${issue.fields.summary}</a>`);
+/**
+ * Display a loaded JIRA issue in the form as a link.
+ * @param issue The JIRA issue object as fetched from JIRA rest API
+ */
+function showIssue(issue) {
+	$("#parsedJiraIssue").empty().append(`<a href="${jiraBrowseIssue}/${issue.key}" target="_blank">${issue.key} - ${issue.fields.summary}</a>`);
+}
+
+function showIssueDefault() {
+	$("#parsedJiraIssue").empty().append(`<span>Zadejte kód JIRA Issue na začátek Popisu činnosti.</span>`);
 }
 
 function issueLoadingFailed(responseDetail) {
 	let responseErr = responseDetail.response;
 	let key = responseDetail.key;
 	if (responseErr.status === 401) {
-		$("#parsedJiraIssue").empty().append(`Jira authentication failed. Please <a href="${jiraUrl}/${key}">log in to Jira.</a>`)
+		$("#parsedJiraIssue").empty().append(`JIRA autentifikace selhala. <a href="${jiraUrl}/${key}">Přihlaste se do JIRA.</a>`)
 		return
 	}
 	if (responseErr.status === 404
@@ -98,11 +105,11 @@ function issueLoadingFailed(responseDetail) {
 		&& responseErr.responseHeaders.match(/content-type:\sapplication\/json/) != null) {
 		let error = JSON.parse(responseErr.responseText);
 		if (error.errorMessages) {
-			$("#parsedJiraIssue").empty().append(`Failed to load issue ${key}: ${error.errorMessages.join(", ")}.`);
+			$("#parsedJiraIssue").empty().append(`<span>Nepodařilo se načíst issue ${key}: ${error.errorMessages.join(", ")}.</span>`);
 			return;
 		}
 	}
-	$("#parsedJiraIssue").empty().append(`Something bad happened, you may need to log your work to Jira manually.`)
+	$("#parsedJiraIssue").empty().append(`<span>Něco zlého se přihodilo. Asi budete muset vykázat do JIRA ručně.</span>`)
 }
 
 function loadIssue(key) {
@@ -122,7 +129,7 @@ function loadIssue(key) {
 				//This does not actually mean the status was OK
 				if (response.status === 200) {
 					console.log(`Issue ${key} loaded successfully.`);
-					displayIssue(JSON.parse(response.responseText));
+					showIssue(JSON.parse(response.responseText));
 				} else {
 					console.log(`Failed to load issue ${key}. Status: ${response.status}`);
 					issueLoadingFailed({key, response});
@@ -143,14 +150,18 @@ function tryParseIssue(desc) {
 	}
 	let wd = WorkDescription.parse(desc);
 	if (wd.issueKey) {
-		console.log("Jira issue key recognized: ", wd.issueKey);
+		console.log("JIRA issue key recognized: ", wd.issueKey);
 		loadIssue(wd.issueKey);
+	} else {
+		showIssueDefault();
 	}
 }
 
 function workDescriptionChanged(e) {
 	tryParseIssue(e.target.value);
 }
+
+showIssueDefault();
 
 //TODO register this only when the textArea receives focus so it may be also updated by selecting a issue from a dropdown
 console.log("Attaching an onchange listener to the work description input.");
