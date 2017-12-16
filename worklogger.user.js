@@ -3,12 +3,13 @@
 // @description  JIRA work log in UU
 // @version      0.0.1
 // @namespace    https://plus4u.net/
-// @author       AHoj
+// @author       bubblefoil
 // @license      MIT
 // @require      https://code.jquery.com/jquery-3.2.1.min.js
 // @grant        GM_xmlhttpRequest
-// @connect      https://jira.unicorn.eu/rest
+// @connect      jira.unicorn.eu
 // @match        https://plus4u.net/*
+// @run-at       document-end
 // ==/UserScript==
 
 //Test issue - FBLI-7870
