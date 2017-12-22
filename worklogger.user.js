@@ -32,6 +32,16 @@ if (!$formBody.length) {
 	return;
 }
 
+class P4U {
+
+    /** Returns the OK button. It is an &lt;a&gt; element containing a structure of spans. */
+    static buttonOk() {
+        //TODO initialize this after the buttons are present. Use MutationObserver to detect the changes.
+        // return this._buttonOk;
+        return $("#form-btn-ok_label").parentElement.parentElement;
+    }
+
+}
 /**
  * JIRA API connector.
  */
@@ -68,14 +78,25 @@ class Jira4U {
  */
 class IssueVisual {
 
+    constructor() {
+        if ($("#parsedJiraIssue").length === 0) {
+            this.addToForm();
+        }
+        this._$jiraIssueSummary = $("#parsedJiraIssue");
+    }
+
     /**
      * Adds jira issue container to the form.
      */
-    static addToForm() {
+    addToForm() {
+        console.log("Adding JIRA Visual into form");
         $formBody.append
         (`<div class="vcFormItem vcFormItemShow">
             <div class="vcSpanNormalLeftInline">
-                <div class="LabelBlock"><label>JIRA issue</label></div>
+                <div class="LabelBlock">
+                    <label for="jiraLogWorkEnabled">Vykázat na <u>J</u>IRA issue</label>
+                    <input type="checkbox" id="jiraLogWorkEnabled" checked="checked" accesskey="j" style=" margin-bottom: 3px; vertical-align: bottom; ">
+                </div>
                 <span style="background: url(../webui/images/infotip.gif) center bottom no-repeat"></span>
             </div>
             <div class="vcSpanNormalRightInline">
@@ -83,28 +104,29 @@ class IssueVisual {
             </div>
         </div>
         `);
+        this._$jiraIssueSummary = $("#parsedJiraIssue");
     }
 
     /**
      * Display a loaded JIRA issue in the form as a link.
      * @param issue The JIRA issue object as fetched from JIRA rest API
      */
-    static showIssue(issue) {
-        $("#parsedJiraIssue").empty().append(`<a href="${jiraBrowseIssue}/${issue.key}" target="_blank">${issue.key} - ${issue.fields.summary}</a>`);
+    showIssue(issue) {
+        this._$jiraIssueSummary.empty().append(`<a href="${jiraBrowseIssue}/${issue.key}" target="_blank">${issue.key} - ${issue.fields.summary}</a>`);
     }
 
     /**
      * The default content to be displayed when no issue has been loaded.
      */
-    static showIssueDefault() {
-        $("#parsedJiraIssue").empty().append(`<span>Zadejte kód JIRA Issue na začátek Popisu činnosti.</span>`);
+    showIssueDefault() {
+        this._$jiraIssueSummary.empty().append(`<span>Zadejte kód JIRA Issue na začátek Popisu činnosti.</span>`);
     }
 
-    static issueLoadingFailed(responseDetail) {
+    issueLoadingFailed(responseDetail) {
         let responseErr = responseDetail.response;
         let key = responseDetail.key;
         if (responseErr.status === 401) {
-            $("#parsedJiraIssue").empty().append(`JIRA autentifikace selhala. <a href="${jiraUrl}/${key}">Přihlaste se do JIRA.</a>`);
+            this._$jiraIssueSummary.empty().append(`JIRA autentifikace selhala. <a href="${jiraUrl}/${key}">Přihlaste se do JIRA.</a>`);
             return;
         }
         if (responseErr.status === 404
@@ -112,11 +134,11 @@ class IssueVisual {
             && responseErr.responseHeaders.match(/content-type:\sapplication\/json/) != null) {
             let error = JSON.parse(responseErr.responseText);
             if (error.errorMessages) {
-                $("#parsedJiraIssue").empty().append(`<span>Nepodařilo se načíst issue ${key}: ${error.errorMessages.join(", ")}.</span>`);
+                this._$jiraIssueSummary.empty().append(`<span>Nepodařilo se načíst issue ${key}: ${error.errorMessages.join(", ")}.</span>`);
                 return;
             }
         }
-        $("#parsedJiraIssue").empty().append(`<span>Něco se přihodilo. Asi budete muset vykázat do JIRA ručně.</span>`);
+        this._$jiraIssueSummary.empty().append(`<span>Něco se přihodilo. Asi budete muset vykázat do JIRA ručně.</span>`);
     }
 }
 
@@ -159,8 +181,10 @@ class WorkDescription {
 }
 
 // Initialize the page decoration.
-IssueVisual.addToForm();
-IssueVisual.showIssueDefault();
+// const p4U = new P4U();
+// p4U.buttonOk($("#form-btn-ok_label").parentElement.parentElement);
+const issueVisual = new IssueVisual();
+issueVisual.showIssueDefault();
 const jira4U = new Jira4U();
 
 console.log("Attaching an onchange listener to the work description input.");
@@ -187,16 +211,16 @@ function tryParseIssue(desc) {
             //Getting into the onload function does not actually mean the status was OK
             if (response.status === 200) {
                 console.log(`Issue ${key} loaded successfully.`);
-                IssueVisual.showIssue(JSON.parse(response.responseText));
+                issueVisual.showIssue(JSON.parse(response.responseText));
             } else {
                 console.log(`Failed to load issue ${key}. Status: ${response.status}`);
-                IssueVisual.issueLoadingFailed({key, response});
+                issueVisual.issueLoadingFailed({key, response});
             }
         }, responseErr => {
             console.log(`Failed to load issue ${key}. Status: ${responseErr.status}`);
-            IssueVisual.issueLoadingFailed({key, response: responseErr});
+            issueVisual.issueLoadingFailed({key, response: responseErr});
         });
     } else {
-        IssueVisual.showIssueDefault();
+        issueVisual.showIssueDefault();
     }
 }
