@@ -99,8 +99,8 @@ function issueLoadingFailed(responseDetail) {
 	let responseErr = responseDetail.response;
 	let key = responseDetail.key;
 	if (responseErr.status === 401) {
-		$("#parsedJiraIssue").empty().append(`JIRA autentifikace selhala. <a href="${jiraUrl}/${key}">Přihlaste se do JIRA.</a>`)
-		return
+        $("#parsedJiraIssue").empty().append(`JIRA autentifikace selhala. <a href="${jiraUrl}/${key}">Přihlaste se do JIRA.</a>`);
+        return;
 	}
 	if (responseErr.status === 404
 		&& responseErr.responseHeaders
@@ -111,7 +111,7 @@ function issueLoadingFailed(responseDetail) {
 			return;
 		}
 	}
-	$("#parsedJiraIssue").empty().append(`<span>Něco zlého se přihodilo. Asi budete muset vykázat do JIRA ručně.</span>`)
+    $("#parsedJiraIssue").empty().append(`<span>Něco se přihodilo. Asi budete muset vykázat do JIRA ručně.</span>`);
 }
 
 function loadIssue(key) {
@@ -165,9 +165,8 @@ function workDescriptionChanged(e) {
 
 showIssueDefault();
 
-//TODO register this only when the textArea receives focus so it may be also updated by selecting a issue from a dropdown
 console.log("Attaching an onchange listener to the work description input.");
-$descArea.change(function (e) {
-	console.log(e);
-	workDescriptionChanged(e);
+$descArea.on("propertychange keyup input cut paste", (e) => {
+    console.log(e);
+    workDescriptionChanged(e);
 });
