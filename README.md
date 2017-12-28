@@ -1,14 +1,16 @@
-# Plus4U++
+# Plus4U++ aka p4u-worklogger
 Plus4U work log enhancement
 
 ***
 
 ## At the moment
-Browser user script which decorates the Plus4U work log page to display a JIRA issue mentioned in the work description.
+Browser user script which enhances the Plus4U work log page.
+- Loads and displays summary of a a JIRA issue, whose key is mentioned in the work description, as a link
+- Writes a work log record directly into JIRA the moment it is created at the Plus4U work log page.
 
 ## In the future
-Browser user script which decorates the Plus4U work log page to integrate JIRA issue tracker.
-The primary goal is to allow writing work log records directly into JIRA the moment they are created in the Plus4U work log page.
+Thanks to JIRA REST API flexibility, the user script may integrate JIRA issue tracker into the Plus4U work log page much more tightly.
+Feel free to suggest new features at [GitHub Issues page](https://github.com/bubblefoil/p4u-worklogger/issues).
 
 ***
 
