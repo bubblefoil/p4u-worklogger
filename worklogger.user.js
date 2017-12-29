@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.0.0
+// @version      1.0.1
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
 // @require      https://code.jquery.com/jquery-3.2.1.min.js
 // @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @connect      jira.unicorn.eu
 // @match        https://plus4u.net/*
 // @run-at       document-idle
@@ -80,14 +82,16 @@ class P4U {
         return document.getElementById("form-btn-ok").parentElement;
     }
 
-    /** Returns the 'Next item' button. It is an &lt;a&gt; element containing a structure of spans. */
+    /** Returns the 'Next item' button. It is an &lt;a&gt; element containing a structure of spans, or null in case of work log update. */
     static buttonNextItem() {
-        return document.getElementById("form-btn-next").parentElement;
+        const innerSpan = document.getElementById("form-btn-next");
+        return (innerSpan) ? innerSpan.parentElement : null;
     }
 
-    /** Returns the 'Next day' button. It is an &lt;a&gt; element containing a structure of spans. */
+    /** Returns the 'Next day' button. It is an &lt;a&gt; element containing a structure of spans, or null in case of work log update. */
     static buttonNextDayItem() {
-        return document.getElementById("form-btn-next-day").parentElement;
+        const innerSpan = document.getElementById("form-btn-next-day");
+        return (innerSpan) ? innerSpan.parentElement : null;
     }
 
 }
@@ -132,7 +136,7 @@ class Jira4U {
     /**
      * @param {string} workInfo.key JIRA issue key string.
      * @param {Date} workInfo.started The date/time the work on the issue started.
-     * @param {number} workInfo.duration in minutes.
+     * @param {number} workInfo.duration in seconds.
      * @param {string} workInfo.comment The work log comment.
      * @param {Function} [workInfo.onSuccess] Callback to be invoked on response from JIRA.
      * @param {Function} [workInfo.onError] Callback to be invoked in case the JIRA request fails.
@@ -152,7 +156,7 @@ class Jira4U {
                     "User-Agent": "xx"
                 },
                 data: `{
-                        "timeSpent": "${workInfo.duration}m",
+                        "timeSpentSeconds": ${workInfo.duration},
                         "started": "${this.toIsoString(workInfo.started)}",
                         "comment": "${workInfo.comment}"
                     }`,
@@ -194,6 +198,7 @@ class Jira4U {
  */
 class IssueVisual {
     constructor() {
+        this._jiraLogWorkEnabledValue = "p4u.jira.worklog.enabled";
         if ($("#parsedJiraIssue").length === 0) {
             this.addToForm();
         }
@@ -205,13 +210,15 @@ class IssueVisual {
      * Adds jira issue container to the form.
      */
     addToForm() {
+        const logWorkEnabled = GM_getValue(this._jiraLogWorkEnabledValue, true);
+        const checked = logWorkEnabled ? `checked="checked"` : "";
         console.log("Adding JIRA Visual into form");
         $formBody.append
         (`<div class="vcFormItem vcFormItemShow">
             <div class="vcSpanNormalLeftInline">
                 <div class="LabelBlock">
                     <label for="jiraLogWorkEnabled">Vykázat na <u>J</u>IRA issue</label>
-                    <input type="checkbox" id="jiraLogWorkEnabled" checked="checked" accesskey="j" style=" margin-bottom: 3px; vertical-align: bottom; ">
+                    <input type="checkbox" id="jiraLogWorkEnabled" ${checked} accesskey="j" style=" margin-bottom: 3px; vertical-align: bottom; ">
                 </div>
                 <span style="background: url(../webui/images/infotip.gif) center bottom no-repeat"></span>
             </div>
@@ -223,6 +230,10 @@ class IssueVisual {
         </div>
         `);
         this._$jiraIssueSummary = $("#parsedJiraIssue");
+        const logWorkEnableCheckbox = document.getElementById("jiraLogWorkEnabled");
+        logWorkEnableCheckbox.onclick = () => {
+            GM_setValue(this._jiraLogWorkEnabledValue, logWorkEnableCheckbox.checked);
+        };
     }
 
     isJiraLogWorkEnabled() {
@@ -334,18 +345,20 @@ function writeWorkLogToJira() {
     if (durationMillis < 0) {
         return;
     }
-    const durationMinutes = durationMillis / 1000 / 60;
-    console.log(`Logging ${durationMinutes} minutes of work on ${wd.issueKey}`);
+    const durationSeconds = durationMillis / 1000;
+    console.log(`Logging ${durationSeconds} minutes of work on ${wd.issueKey}`);
     // jira4U.logWorkTest();
     jira4U.logWork({
         key: wd.issueKey,
         started: dateFrom,
-        duration: durationMinutes,
+        duration: durationSeconds,
         comment: wd.descriptionText,
         onSuccess: (res) => {
+            debugger;
             console.log("Work was successfully logged to JIRA.", JSON.parse(res.responseText));
         },
         onError: (err) => {
+            debugger;
             console.log("Failed to log work to JIRA. ", err);
         },
         onReadyStateChange: function (res) {
