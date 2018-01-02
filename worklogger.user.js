@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.0.1
+// @version      1.0.2
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -92,6 +92,24 @@ class P4U {
     static buttonNextDayItem() {
         const innerSpan = document.getElementById("form-btn-next-day");
         return (innerSpan) ? innerSpan.parentElement : null;
+    }
+
+    /** Adds mnemonics (access keys) to the form buttons. */
+    static registerAccessKeys() {
+        this.addMnemonic(document.getElementById('form-btn-next-day_label'), "n");
+        this.addMnemonic(document.getElementById('form-btn-next_label'), "p");
+    }
+
+    /**
+     *
+     * @param {HTMLElement} element
+     * @param {string} key
+     */
+    static addMnemonic(element, key) {
+        if (element && key && key.length === 1 && element.innerText.indexOf(key) > 0) {
+            element.innerHTML = element.innerText.replace(key, `<u>${key}</u>`);
+            element.accessKey = key;
+        }
     }
 
 }
@@ -199,10 +217,10 @@ class Jira4U {
 class IssueVisual {
     constructor() {
         this._jiraLogWorkEnabledValue = "p4u.jira.worklog.enabled";
-        if ($("#parsedJiraIssue").length === 0) {
+        const $parsedJiraIssue = $("#parsedJiraIssue");
+        if ($parsedJiraIssue.length === 0) {
             this.addToForm();
         }
-        this._$jiraIssueSummary = $("#parsedJiraIssue");
         this._jiraLogWorkEnabled = document.getElementById("jiraLogWorkEnabled");
     }
 
@@ -210,9 +228,11 @@ class IssueVisual {
      * Adds jira issue container to the form.
      */
     addToForm() {
+        // noinspection JSUnresolvedFunction
         const logWorkEnabled = GM_getValue(this._jiraLogWorkEnabledValue, true);
         const checked = logWorkEnabled ? `checked="checked"` : "";
         console.log("Adding JIRA Visual into form");
+        // noinspection CssUnknownTarget
         $formBody.append
         (`<div class="vcFormItem vcFormItemShow">
             <div class="vcSpanNormalLeftInline">
@@ -229,9 +249,9 @@ class IssueVisual {
             </div>
         </div>
         `);
-        this._$jiraIssueSummary = $("#parsedJiraIssue");
         const logWorkEnableCheckbox = document.getElementById("jiraLogWorkEnabled");
         logWorkEnableCheckbox.onclick = () => {
+            // noinspection JSUnresolvedFunction
             GM_setValue(this._jiraLogWorkEnabledValue, logWorkEnableCheckbox.checked);
         };
     }
@@ -243,23 +263,25 @@ class IssueVisual {
     /**
      * Display a loaded JIRA issue in the form as a link.
      * @param issue The JIRA issue object as fetched from JIRA rest API
+     * @param {string} issue.key The key of the JIRA issue, e.g. XYZ-1234
+     * @param {string} issue.fields.summary The JIRA issue summary, i.e. the title of the ticket.
      */
     showIssue(issue) {
-        this._$jiraIssueSummary.empty().append(`<a href="${jiraBrowseIssue}/${issue.key}" target="_blank">${issue.key} - ${issue.fields.summary}</a>`);
+        IssueVisual.$jiraIssueSummary().empty().append(`<a href="${jiraBrowseIssue}/${issue.key}" target="_blank">${issue.key} - ${issue.fields.summary}</a>`);
     }
 
     /**
      * The default content to be displayed when no issue has been loaded.
      */
     showIssueDefault() {
-        this._$jiraIssueSummary.empty().append(`<span>Zadejte kód JIRA Issue na začátek Popisu činnosti.</span>`);
+        IssueVisual.$jiraIssueSummary().empty().append(`<span>Zadejte kód JIRA Issue na začátek Popisu činnosti.</span>`);
     }
 
     issueLoadingFailed(responseDetail) {
         let responseErr = responseDetail.response;
         let key = responseDetail.key;
         if (responseErr.status === 401) {
-            this._$jiraIssueSummary.empty().append(`JIRA autentifikace selhala. <a href="${jiraBrowseIssue}/${key}" target="_blank">Přihlaste se do JIRA.</a>`);
+            IssueVisual.$jiraIssueSummary().empty().append(`JIRA autentifikace selhala. <a href="${jiraBrowseIssue}/${key}" target="_blank">Přihlaste se do JIRA.</a>`);
             return;
         }
         if (responseErr.status === 404
@@ -267,11 +289,15 @@ class IssueVisual {
             && responseErr.responseHeaders.match(/content-type:\sapplication\/json/) != null) {
             let error = JSON.parse(responseErr.responseText);
             if (error.errorMessages) {
-                this._$jiraIssueSummary.empty().append(`<span>Nepodařilo se načíst issue ${key}: ${error.errorMessages.join(", ")}.</span>`);
+                IssueVisual.$jiraIssueSummary().empty().append(`<span>Nepodařilo se načíst issue ${key}: ${error.errorMessages.join(", ")}.</span>`);
                 return;
             }
         }
-        this._$jiraIssueSummary.empty().append(`<span>Něco se přihodilo. Asi budete muset vykázat do JIRA ručně.</span>`);
+        IssueVisual.$jiraIssueSummary().empty().append(`<span>Něco se přihodilo. Asi budete muset vykázat do JIRA ručně.</span>`);
+    }
+
+    static $jiraIssueSummary() {
+        return $(document.getElementById("parsedJiraIssue"));
     }
 }
 
@@ -305,95 +331,109 @@ class WorkDescription {
     }
 }
 
-// Initialize the page decoration.
-const issueVisual = new IssueVisual();
-issueVisual.showIssueDefault();
-const jira4U = new Jira4U();
-
-console.log("Attaching an onchange listener to the work description input.");
-$(P4U.descArea()).on("propertychange keyup input cut paste", (e) => {
-    //TODO Detect if the issue key has actually changed to avoid repeated queries when typing a comment.
-    workDescriptionChanged(e.target.value);
-});
-//In case of a Work log update, there may already be some work description.
-if (P4U.descArea().value) {
-    workDescriptionChanged(P4U.descArea().value)
-}
-
-//Intercept form's confirmation buttons
-P4U.buttonOk().onclick = writeWorkLogToJiraIfEnabled;
-if (P4U.buttonNextItem()) P4U.buttonNextItem().onclick = writeWorkLogToJiraIfEnabled;
-if (P4U.buttonNextDayItem()) P4U.buttonNextDayItem().onclick = writeWorkLogToJiraIfEnabled;
-
-function writeWorkLogToJiraIfEnabled() {
-    if (issueVisual.isJiraLogWorkEnabled()) {
-        writeWorkLogToJira();
-    }
-}
-
-function writeWorkLogToJira() {
-    const wd = Jira4U.tryParseIssue(P4U.descArea().value);
-    if (!wd.issueKey) {
-        return;
-    }
-    const dateFrom = P4U.dateFrom();
-    const dateTo = P4U.dateTo();
-    if (isNaN(dateFrom.getTime()) || isNaN(dateFrom.getTime())) {
-        return;
-    }
-    const durationMillis = dateTo - dateFrom;
-    if (durationMillis < 0) {
-        return;
-    }
-    const durationSeconds = durationMillis / 1000;
-    console.log(`Logging ${durationSeconds} minutes of work on ${wd.issueKey}`);
-    // jira4U.logWorkTest();
-    jira4U.logWork({
-        key: wd.issueKey,
-        started: dateFrom,
-        duration: durationSeconds,
-        comment: wd.descriptionText,
-        onSuccess: (res) => {
-            debugger;
-            console.log("Work was successfully logged to JIRA.", JSON.parse(res.responseText));
-        },
-        onError: (err) => {
-            debugger;
-            console.log("Failed to log work to JIRA. ", err);
-        },
-        onReadyStateChange: function (res) {
-            console.log("Log work request state changed to: " + res.readyState);
-        }
-    });
-}
-
 /**
- * @param {string} description The new work description value
+ * Wraps the rest of the script, mainly the steps that are executed when the document is loaded.
  */
-function workDescriptionChanged(description) {
-    const wd = Jira4U.tryParseIssue(description);
-    loadJiraIssue(wd);
-}
+class P4uWorklogger {
 
-function loadJiraIssue(wd) {
-    if (wd.issueKey) {
-        let key = wd.issueKey;
-        console.log("JIRA issue key recognized: ", key);
-        jira4U.loadIssue(wd.issueKey, response => {
-            console.log(`Loading of issue ${key} completed.`);
-            //Getting into the onload function does not actually mean the status was OK
-            if (response.status === 200) {
-                console.log(`Issue ${key} loaded successfully.`);
-                issueVisual.showIssue(JSON.parse(response.responseText));
-            } else {
-                console.log(`Failed to load issue ${key}. Status: ${response.status}`);
-                issueVisual.issueLoadingFailed({key, response});
-            }
-        }, responseErr => {
-            console.log(`Failed to load issue ${key}. Status: ${responseErr.status}`);
-            issueVisual.issueLoadingFailed({key, response: responseErr});
+    constructor() {
+        // Initialize the page decoration.
+        this.issueVisual = new IssueVisual();
+        this.jira4U = new Jira4U();
+    }
+
+    doTheMagic() {
+        this.issueVisual.showIssueDefault();
+
+        console.log("Attaching an onchange listener to the work description input.");
+        $(P4U.descArea()).on("propertychange keyup input cut paste", (e) => {
+            //TODO Detect if the issue key has actually changed to avoid repeated queries when typing a comment.
+            this.workDescriptionChanged(e.target.value);
         });
-    } else {
-        issueVisual.showIssueDefault();
+
+        //In case of a Work log update, there may already be some work description.
+        if (P4U.descArea().value) {
+            this.workDescriptionChanged(P4U.descArea().value)
+        }
+
+        //Intercept form's confirmation buttons.
+        //The callback function cannot be used directly because the context of 'this' in the callback would be the event target.
+        P4U.buttonOk().onclick = () => this.writeWorkLogToJiraIfEnabled();
+        if (P4U.buttonNextItem()) P4U.buttonNextItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
+        if (P4U.buttonNextDayItem()) P4U.buttonNextDayItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
+
+        P4U.registerAccessKeys();
+    }
+
+    writeWorkLogToJiraIfEnabled() {
+        if (this.issueVisual.isJiraLogWorkEnabled()) {
+            this.writeWorkLogToJira();
+        }
+    }
+
+    writeWorkLogToJira() {
+        const wd = Jira4U.tryParseIssue(P4U.descArea().value);
+        if (!wd.issueKey) {
+            return;
+        }
+        const dateFrom = P4U.dateFrom();
+        const dateTo = P4U.dateTo();
+        if (isNaN(dateFrom.getTime()) || isNaN(dateFrom.getTime())) {
+            return;
+        }
+        const durationMillis = dateTo - dateFrom;
+        if (durationMillis < 0) {
+            return;
+        }
+        const durationSeconds = durationMillis / 1000;
+        console.log(`Logging ${durationSeconds} minutes of work on ${wd.issueKey}`);
+        this.jira4U.logWork({
+            key: wd.issueKey,
+            started: dateFrom,
+            duration: durationSeconds,
+            comment: wd.descriptionText,
+            onSuccess: (res) => {
+                console.log("Work was successfully logged to JIRA.", JSON.parse(res.responseText));
+            },
+            onError: (err) => {
+                console.log("Failed to log work to JIRA. ", err);
+            },
+            onReadyStateChange: function (res) {
+                console.log("Log work request state changed to: " + res.readyState);
+            }
+        });
+    }
+
+    /**
+     * @param {string} description The new work description value
+     */
+    workDescriptionChanged(description) {
+        const wd = Jira4U.tryParseIssue(description);
+        this.loadJiraIssue(wd);
+    }
+
+    loadJiraIssue(wd) {
+        if (wd.issueKey) {
+            let key = wd.issueKey;
+            console.log("JIRA issue key recognized: ", key);
+            this.jira4U.loadIssue(wd.issueKey, response => {
+                console.log(`Loading of issue ${key} completed.`);
+                //Getting into the onload function does not actually mean the status was OK
+                if (response.status === 200) {
+                    console.log(`Issue ${key} loaded successfully.`);
+                    this.issueVisual.showIssue(JSON.parse(response.responseText));
+                } else {
+                    console.log(`Failed to load issue ${key}. Status: ${response.status}`);
+                    this.issueVisual.issueLoadingFailed({key, response});
+                }
+            }, responseErr => {
+                console.log(`Failed to load issue ${key}. Status: ${responseErr.status}`);
+                this.issueVisual.issueLoadingFailed({key, response: responseErr});
+            });
+        } else {
+            this.issueVisual.showIssueDefault();
+        }
     }
 }
+
+new P4uWorklogger().doTheMagic();
