@@ -18,3 +18,12 @@ Feel free to suggest new features at [GitHub Issues page](https://github.com/bub
 * Install a user script manager ([Greasemonkey](https://www.greasespot.net/), [Tampermonkey](https://tampermonkey.net/))
  extension into your browser
 * Check the manual of the script manager for further instructions
+
+***
+
+### Changelog
+- **1.0.2**
+    - Added Ctrl-Enter shortcut to OK button
+    - Added mnemonics to Next item/day buttons
+- **1.0.1**
+    - Persistent checkbox state
