@@ -94,6 +94,15 @@ class P4U {
         return (innerSpan) ? innerSpan.parentElement : null;
     }
 
+    static registerKeyboardShortcuts() {
+        P4U.buttonOk().title = "Ctrl + Enter";
+        $(document).on("keydown", e => {
+            if (e.keyCode === 13 && e.ctrlKey) {
+                P4U.buttonOk().click();
+            }
+        });
+    }
+
     /** Adds mnemonics (access keys) to the form buttons. */
     static registerAccessKeys() {
         this.addMnemonic(document.getElementById('form-btn-next-day_label'), "n");
@@ -111,7 +120,6 @@ class P4U {
             element.accessKey = key;
         }
     }
-
 }
 
 /**
@@ -362,6 +370,7 @@ class P4uWorklogger {
         if (P4U.buttonNextItem()) P4U.buttonNextItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
         if (P4U.buttonNextDayItem()) P4U.buttonNextDayItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
 
+        P4U.registerKeyboardShortcuts();
         P4U.registerAccessKeys();
     }
 
