@@ -1,12 +1,12 @@
 # Plus4U++ aka p4u-worklogger
-Plus4U work log enhancement
+The browser user script which enhances the Plus4U work log page.
 
 ***
 
-## At the moment
-Browser user script which enhances the Plus4U work log page.
-- Loads and displays summary of a a JIRA issue, whose key is mentioned in the work description, as a link
+## Features
+- Loads and displays summary of a a JIRA issue, whose key is mentioned in the work description, as a link.
 - Writes a work log record directly into JIRA the moment it is created at the Plus4U work log page.
+- Adds mnemonics to the form buttons. (See access keys usage in your OS/browser.)
 
 ## In the future
 Thanks to JIRA REST API flexibility, the user script may integrate JIRA issue tracker into the Plus4U work log page much more tightly.
