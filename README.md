@@ -11,12 +11,13 @@ The browser user script which enhances the Plus4U work log page.
 ## In the future
 Thanks to JIRA REST API flexibility, the user script may integrate JIRA issue tracker into the Plus4U work log page much more tightly.
 Feel free to suggest new features at [GitHub Issues page](https://github.com/bubblefoil/p4u-worklogger/issues).
+Eventually this script may come packed as a standalone browser extension.
 
 ***
 
 ## Installation
-* Install a user script manager ([Greasemonkey](https://www.greasespot.net/), [Tampermonkey](https://tampermonkey.net/))
- extension into your browser
+* Install ([Tampermonkey](https://tampermonkey.net/)), the user script manager
+ extension into your browser. The ([Greasemonkey](https://www.greasespot.net/) is not supported. 
 * Check the manual of the script manager for further instructions
 
 ***
