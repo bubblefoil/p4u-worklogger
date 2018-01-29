@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.0.2
+// @version      1.0.3
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -21,20 +21,59 @@ const jiraRestApiUrl = jiraUrl + '/rest/api/2';
 const jiraRestApiUrlIssue = jiraRestApiUrl + '/issue';
 const jiraIssueKeyPattern = /([A-Z]+-\d+)/;
 
-//Check that the work log page is loaded by querying for some expected elements
-const artifactTestButton = document.getElementById("sbx113000_tsi_test");
-if (artifactTestButton == null) {
-	console.log("Not a worklog page, exiting script.");
-	// noinspection JSAnnotator
-	return;
-}
 const $formBody = $("div.info-group > div.info-group-body");
-if (!$formBody.length) {
-	// noinspection JSAnnotator
-	return;
+
+class PageCheck {
+
+    isWorkLogFormPage() {
+        //Check that the work log page is loaded by querying for some expected elements
+        let artifactTestButton = document.getElementById("sbx113000_tsi_test");
+        if (artifactTestButton == null) {
+            console.log("Not a worklog page, exiting script.");
+            return false;
+        }
+
+        if (!$formBody.length) {
+            return false;
+        }
+
+        let $buttonPanel = $("#standard_form_bar");
+        if (!$buttonPanel.length) {
+            return false;
+        }
+        return true;
+    }
+
+    isLogTablePage() {
+        return document.getElementById('table-tsitems') != null;
+    }
+
 }
-const $buttonPanel = $("#standard_form_bar");
-if (!$buttonPanel.length) {
+
+class LogTableDecorator {
+
+    static findAndLinkifyJiraIssues() {
+        const logTableNodes = document.querySelectorAll('#table-tsitems td.htsItemStyle div.hts_object');
+        Array.from(logTableNodes)
+            .filter(node => node.childElementCount === 0 && node.textContent.length > 0)
+            .forEach(node => this.replaceIssueByLink(node))
+    }
+
+    static replaceIssueByLink(element) {
+        const issueKeyPatternGlobal = new RegExp(jiraIssueKeyPattern, "g");
+        element.innerHTML = element.innerText
+            .replace(issueKeyPatternGlobal, `<a href="${jiraBrowseIssue}/$1" target="_blank">$1</a>`);
+    }
+}
+
+let pageCheck = new PageCheck();
+if (pageCheck.isLogTablePage()) {
+    console.log("Work log table detected, replacing JIRA issues with links.");
+    LogTableDecorator.findAndLinkifyJiraIssues();
+    // noinspection JSAnnotator
+    return;
+}
+if (!pageCheck.isWorkLogFormPage()) {
     // noinspection JSAnnotator
     return;
 }

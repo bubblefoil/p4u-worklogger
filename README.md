@@ -23,6 +23,8 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **1.0.3**
+    - Jira issues are detected in the work log table and replaced with links
 - **1.0.2**
     - Added Ctrl-Enter shortcut to OK button
     - Added mnemonics to Next item/day buttons
