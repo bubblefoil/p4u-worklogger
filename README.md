@@ -23,6 +23,8 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **1.0.4**
+    - Jira issue is not reloaded unless the work description is actually changed
 - **1.0.3**
     - Jira issues are detected in the work log table and replaced with links
 - **1.0.2**

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.0.3
+// @version      1.0.4
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -22,6 +22,8 @@ const jiraRestApiUrlIssue = jiraRestApiUrl + '/issue';
 const jiraIssueKeyPattern = /([A-Z]+-\d+)/;
 
 const $formBody = $("div.info-group > div.info-group-body");
+
+//TODO customfield_10174 this is the project_code value. Use it if available.
 
 class PageCheck {
 
@@ -50,8 +52,16 @@ class PageCheck {
 
 }
 
+
+/**
+ * Enhances the work log table.
+ */
 class LogTableDecorator {
 
+    /**
+     * Finds the JIRA issue references in the work descriptions in the work log table
+     * and replaces them with links.
+     */
     static findAndLinkifyJiraIssues() {
         const logTableNodes = document.querySelectorAll('#table-tsitems td.htsItemStyle div.hts_object');
         Array.from(logTableNodes)
@@ -387,6 +397,7 @@ class P4uWorklogger {
         // Initialize the page decoration.
         this.issueVisual = new IssueVisual();
         this.jira4U = new Jira4U();
+        this._previousDesctiptionValue = P4U.descArea().value;
     }
 
     doTheMagic() {
@@ -394,8 +405,10 @@ class P4uWorklogger {
 
         console.log("Attaching an onchange listener to the work description input.");
         $(P4U.descArea()).on("propertychange keyup input cut paste", (e) => {
-            //TODO Detect if the issue key has actually changed to avoid repeated queries when typing a comment.
-            this.workDescriptionChanged(e.target.value);
+            if (this._previousDesctiptionValue !== e.target.value) {
+                this._previousDesctiptionValue = e.target.value;
+                this.workDescriptionChanged(e.target.value);
+            }else console.log("No description change")
         });
 
         //In case of a Work log update, there may already be some work description.
