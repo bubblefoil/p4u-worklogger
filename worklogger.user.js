@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.0.4
+// @version      1.0.5
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -64,14 +64,15 @@ class LogTableDecorator {
      */
     static findAndLinkifyJiraIssues() {
         const logTableNodes = document.querySelectorAll('#table-tsitems td.htsItemStyle div.hts_object');
+        const hasTextNodes = (p) => Array.from(p.childNodes).find(n => n.nodeType === 3);
         Array.from(logTableNodes)
-            .filter(node => node.childElementCount === 0 && node.textContent.length > 0)
-            .forEach(node => this.replaceIssueByLink(node))
+            .filter(hasTextNodes)
+            .forEach(node => this.replaceIssueByLink(node));
     }
 
     static replaceIssueByLink(element) {
         const issueKeyPatternGlobal = new RegExp(jiraIssueKeyPattern, "g");
-        element.innerHTML = element.innerText
+        element.innerHTML = element.innerHTML
             .replace(issueKeyPatternGlobal, `<a href="${jiraBrowseIssue}/$1" target="_blank">$1</a>`);
     }
 }
