@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.0.5
+// @version      1.0.6
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -169,6 +169,10 @@ class P4U {
             element.innerHTML = element.innerText.replace(key, `<u>${key}</u>`);
             element.accessKey = key;
         }
+    }
+
+    static artefactField(){
+        return document.getElementById("sbx113000_tsi");
     }
 }
 
@@ -389,6 +393,23 @@ class WorkDescription {
     }
 }
 
+class FlowBasedConfiguration {
+    static resolveArtefact(jiraIssue) {
+        if (jiraIssue.issueKeyPrefix === "FBLI" || jiraIssue.issueKeyPrefix === "FBCE") {
+            if (jiraIssue.system === "FB IDCC") {
+                if(jiraIssue.type==="Change Request"){
+                    return "USYE.IDCC/CR";
+                }else {
+                    return "USYE.FBL1/IDCC_P1";
+                }
+            }else{
+                return jiraIssue.projectCode;
+            }
+        }
+        return null;
+    }
+}
+
 /**
  * Wraps the rest of the script, mainly the steps that are executed when the document is loaded.
  */
@@ -409,7 +430,7 @@ class P4uWorklogger {
             if (this._previousDesctiptionValue !== e.target.value) {
                 this._previousDesctiptionValue = e.target.value;
                 this.workDescriptionChanged(e.target.value);
-            }else console.log("No description change")
+            } else console.log("No description change")
         });
 
         //In case of a Work log update, there may already be some work description.
@@ -431,6 +452,25 @@ class P4uWorklogger {
         if (this.issueVisual.isJiraLogWorkEnabled()) {
             this.writeWorkLogToJira();
         }
+    }
+
+    fillArtefactIfNeeded(pureJiraIssue) {
+        if (!P4U.artefactField().value) {
+            var jiraIssue = this.mapToHumanJiraIssue(pureJiraIssue);
+            var artefact = FlowBasedConfiguration.resolveArtefact(jiraIssue);
+            if (artefact) {
+                P4U.artefactField().value = artefact;
+            }
+        }
+    }
+
+    mapToHumanJiraIssue(pureJiraIssue) {
+        var humanReadableIssue = {};
+        humanReadableIssue.projectCode = pureJiraIssue.fields.customfield_10174.value;
+        humanReadableIssue.system = pureJiraIssue.fields.customfield_12271.value;
+        humanReadableIssue.type = pureJiraIssue.fields.issuetype.name;
+        humanReadableIssue.issueKeyPrefix = pureJiraIssue.fields.project.key ;
+        return humanReadableIssue;
     }
 
     writeWorkLogToJira() {
@@ -483,7 +523,9 @@ class P4uWorklogger {
                 //Getting into the onload function does not actually mean the status was OK
                 if (response.status === 200) {
                     console.log(`Issue ${key} loaded successfully.`);
-                    this.issueVisual.showIssue(JSON.parse(response.responseText));
+                    var pureJiraIssue = JSON.parse(response.responseText);
+                    this.issueVisual.showIssue(pureJiraIssue);
+                    this.fillArtefactIfNeeded(pureJiraIssue);
                 } else {
                     console.log(`Failed to load issue ${key}. Status: ${response.status}`);
                     this.issueVisual.issueLoadingFailed({key, response});
