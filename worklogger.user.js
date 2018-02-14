@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.0.6
+// @version      1.0.5
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -171,7 +171,7 @@ class P4U {
         }
     }
 
-    static artefactField(){
+    static artefactField() {
         return document.getElementById("sbx113000_tsi");
     }
 }
@@ -397,12 +397,12 @@ class FlowBasedConfiguration {
     static resolveArtefact(jiraIssue) {
         if (jiraIssue.issueKeyPrefix === "FBLI" || jiraIssue.issueKeyPrefix === "FBCE") {
             if (jiraIssue.system === "FB IDCC") {
-                if(jiraIssue.type==="Change Request"){
+                if (jiraIssue.type === "Change Request") {
                     return "USYE.IDCC/CR";
-                }else {
+                } else {
                     return "USYE.FBL1/IDCC_P1";
                 }
-            }else{
+            } else {
                 return jiraIssue.projectCode;
             }
         }
@@ -454,22 +454,22 @@ class P4uWorklogger {
         }
     }
 
-    fillArtefactIfNeeded(pureJiraIssue) {
+    fillArtefactIfNeeded(rawJiraIssue) {
         if (!P4U.artefactField().value) {
-            var jiraIssue = this.mapToHumanJiraIssue(pureJiraIssue);
-            var artefact = FlowBasedConfiguration.resolveArtefact(jiraIssue);
+            let jiraIssue = this.mapToHumanJiraIssue(rawJiraIssue);
+            let artefact = FlowBasedConfiguration.resolveArtefact(jiraIssue);
             if (artefact) {
                 P4U.artefactField().value = artefact;
             }
         }
     }
 
-    mapToHumanJiraIssue(pureJiraIssue) {
-        var humanReadableIssue = {};
-        humanReadableIssue.projectCode = pureJiraIssue.fields.customfield_10174.value;
-        humanReadableIssue.system = pureJiraIssue.fields.customfield_12271.value;
-        humanReadableIssue.type = pureJiraIssue.fields.issuetype.name;
-        humanReadableIssue.issueKeyPrefix = pureJiraIssue.fields.project.key ;
+    mapToHumanJiraIssue(rawJiraIssue) {
+        let humanReadableIssue = {};
+        humanReadableIssue.projectCode = rawJiraIssue.fields.customfield_10174.value;
+        humanReadableIssue.system = rawJiraIssue.fields.customfield_12271.value;
+        humanReadableIssue.type = rawJiraIssue.fields.issuetype.name;
+        humanReadableIssue.issueKeyPrefix = rawJiraIssue.fields.project.key;
         return humanReadableIssue;
     }
 
@@ -523,9 +523,9 @@ class P4uWorklogger {
                 //Getting into the onload function does not actually mean the status was OK
                 if (response.status === 200) {
                     console.log(`Issue ${key} loaded successfully.`);
-                    var pureJiraIssue = JSON.parse(response.responseText);
-                    this.issueVisual.showIssue(pureJiraIssue);
-                    this.fillArtefactIfNeeded(pureJiraIssue);
+                    let rawJiraIssue = JSON.parse(response.responseText);
+                    this.issueVisual.showIssue(rawJiraIssue);
+                    this.fillArtefactIfNeeded(rawJiraIssue);
                 } else {
                     console.log(`Failed to load issue ${key}. Status: ${response.status}`);
                     this.issueVisual.issueLoadingFailed({key, response});
