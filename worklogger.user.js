@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.0.5
+// @version      1.0.7
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -173,6 +173,14 @@ class P4U {
 
     static artefactField() {
         return document.getElementById("sbx113000_tsi");
+    }
+
+    static roleSelect() {
+        let selects = document.getElementsByTagName("select");
+        let selectsArray = Array.from(selects,select => select);
+        return selectsArray.find(function (select) {
+            return select.name.includes("Role");
+        });
     }
 }
 
@@ -394,9 +402,10 @@ class WorkDescription {
 }
 
 class FlowBasedConfiguration {
+
     static resolveArtefact(jiraIssue) {
-        if (jiraIssue.issueKeyPrefix === "FBLI" || jiraIssue.issueKeyPrefix === "FBCE") {
-            if (jiraIssue.system === "FB IDCC") {
+        if (FlowBasedConfiguration.isFlowBasedJira(jiraIssue)) {
+            if (FlowBasedConfiguration.isIdccProject(jiraIssue)) {
                 if (jiraIssue.type === "Change Request") {
                     return "USYE.IDCC/CR";
                 } else {
@@ -407,6 +416,31 @@ class FlowBasedConfiguration {
             }
         }
         return null;
+    }
+
+    static resolveRole(jiraIssue, roles) {
+        if (FlowBasedConfiguration.isFlowBasedJira(jiraIssue)) {
+            if (FlowBasedConfiguration.isIdccProject(jiraIssue)) {
+                return FlowBasedConfiguration.findRoleWitchContains(roles, "IDCC");
+            } else {
+                return FlowBasedConfiguration.findRoleWitchContains(roles, "FBL1 CGMES");
+            }
+        }
+        return null;
+    }
+
+    static findRoleWitchContains(roles, subStringInRole) {
+        return roles.find(function (role) {
+            return role.text.includes(subStringInRole);
+        });
+    }
+
+    static isFlowBasedJira(jiraIssue) {
+        return jiraIssue.issueKeyPrefix === "FBLI" || jiraIssue.issueKeyPrefix === "FBCE";
+    }
+
+    static isIdccProject(jiraIssue) {
+        return jiraIssue.system === "FB IDCC";
     }
 }
 
@@ -454,9 +488,9 @@ class P4uWorklogger {
         }
     }
 
-    fillArtefactIfNeeded(rawJiraIssue) {
+    static fillArtefactIfNeeded(rawJiraIssue) {
         if (!P4U.artefactField().value) {
-            let jiraIssue = this.mapToHumanJiraIssue(rawJiraIssue);
+            let jiraIssue = P4uWorklogger.mapToHumanJiraIssue(rawJiraIssue);
             let artefact = FlowBasedConfiguration.resolveArtefact(jiraIssue);
             if (artefact) {
                 P4U.artefactField().value = artefact;
@@ -464,7 +498,20 @@ class P4uWorklogger {
         }
     }
 
-    mapToHumanJiraIssue(rawJiraIssue) {
+    static selectRole(rawJiraIssue) {
+        let jiraIssue = P4uWorklogger.mapToHumanJiraIssue(rawJiraIssue);
+        let roles = P4uWorklogger.extractContentFromOptions(P4U.roleSelect());
+        let role = FlowBasedConfiguration.resolveRole(jiraIssue, roles);
+        if (role) {
+            P4U.roleSelect().value = role.value;
+        }
+    }
+
+    static extractContentFromOptions(selectElement) {
+        return Array.from(selectElement.options, option => option);
+    }
+
+    static mapToHumanJiraIssue(rawJiraIssue) {
         let humanReadableIssue = {};
         humanReadableIssue.projectCode = rawJiraIssue.fields.customfield_10174.value;
         humanReadableIssue.system = rawJiraIssue.fields.customfield_12271.value;
@@ -525,7 +572,8 @@ class P4uWorklogger {
                     console.log(`Issue ${key} loaded successfully.`);
                     let rawJiraIssue = JSON.parse(response.responseText);
                     this.issueVisual.showIssue(rawJiraIssue);
-                    this.fillArtefactIfNeeded(rawJiraIssue);
+                    P4uWorklogger.fillArtefactIfNeeded(rawJiraIssue);
+                    P4uWorklogger.selectRole(rawJiraIssue);
                 } else {
                     console.log(`Failed to load issue ${key}. Status: ${response.status}`);
                     this.issueVisual.issueLoadingFailed({key, response});
@@ -538,6 +586,7 @@ class P4uWorklogger {
             this.issueVisual.showIssueDefault();
         }
     }
+
 }
 
 new P4uWorklogger().doTheMagic();
