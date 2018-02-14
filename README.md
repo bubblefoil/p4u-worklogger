@@ -23,14 +23,16 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **1.0.8**
+    - Role and artifact are filled in based on Jira issue attributes. Mapping rules are hardcoded for FBCE projects.
 - **1.0.5**
-    - Fixed Jira issues detection in the work log table in multi-line descriptions
+    - Fixed Jira issues detection in the work log table in multi-line descriptions.
 - **1.0.4**
-    - Jira issue is not reloaded unless the work description is actually changed
+    - Jira issue is not reloaded unless the work description is actually changed.
 - **1.0.3**
-    - Jira issues are detected in the work log table and replaced with links
+    - Jira issues are detected in the work log table and replaced with links.
 - **1.0.2**
-    - Added Ctrl-Enter shortcut to OK button
-    - Added mnemonics to Next item/day buttons
+    - Added Ctrl-Enter shortcut to OK button.
+    - Added mnemonics to Next item/day buttons.
 - **1.0.1**
-    - Persistent checkbox state
+    - Persistent checkbox state.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.0.7
+// @version      1.0.8
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -22,8 +22,6 @@ const jiraRestApiUrlIssue = jiraRestApiUrl + '/issue';
 const jiraIssueKeyPattern = /([A-Z]+-\d+)/;
 
 const $formBody = $("div.info-group > div.info-group-body");
-
-//TODO customfield_10174 this is the project_code value. Use it if available.
 
 class PageCheck {
 
@@ -177,7 +175,7 @@ class P4U {
 
     static roleSelect() {
         let selects = document.getElementsByTagName("select");
-        let selectsArray = Array.from(selects,select => select);
+        let selectsArray = Array.from(selects, select => select);
         return selectsArray.find(function (select) {
             return select.name.includes("Role");
         });
@@ -513,8 +511,9 @@ class P4uWorklogger {
 
     static mapToHumanJiraIssue(rawJiraIssue) {
         let humanReadableIssue = {};
-        humanReadableIssue.projectCode = rawJiraIssue.fields.customfield_10174.value;
-        humanReadableIssue.system = rawJiraIssue.fields.customfield_12271.value;
+        const fieldValue = (field) => field ? field.value : null;
+        humanReadableIssue.projectCode = fieldValue(rawJiraIssue.fields.customfield_10174);
+        humanReadableIssue.system = fieldValue(rawJiraIssue.fields.customfield_12271);
         humanReadableIssue.type = rawJiraIssue.fields.issuetype.name;
         humanReadableIssue.issueKeyPrefix = rawJiraIssue.fields.project.key;
         return humanReadableIssue;
