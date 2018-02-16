@@ -185,12 +185,12 @@ class P4U {
         return document.getElementsByClassName('info-group-body')[0];
     }
 
-    static getRowOfElement(elemnt) {
-        while (elemnt.parentElement) {
-            elemnt = elemnt.parentElement;
-            if (elemnt) {
-                if (elemnt.className === "vcFormItemOuterDiv") {
-                    return elemnt;
+    static getRowOfElement(element) {
+        while (element.parentElement) {
+            element = element.parentElement;
+            if (element) {
+                if (element.className === "vcFormItemOuterDiv") {
+                    return element;
                 }
             } else {
                 return null;
