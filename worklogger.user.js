@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.0.8
+// @version      1.0.9
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -179,6 +179,24 @@ class P4U {
         return selectsArray.find(function (select) {
             return select.name.includes("Role");
         });
+    }
+
+    static formRowsParent() {
+        return document.getElementsByClassName('info-group-body')[0];
+    }
+
+    static getRowOfElement(element) {
+        while (element.parentElement) {
+            element = element.parentElement;
+            if (element) {
+                if (element.className === "vcFormItemOuterDiv") {
+                    return element;
+                }
+            } else {
+                return null;
+            }
+        }
+        return null;
     }
 }
 
@@ -367,6 +385,13 @@ class IssueVisual {
     static $jiraIssueSummary() {
         return $(document.getElementById("parsedJiraIssue"));
     }
+
+    static moveDescArea() {
+        let rowOfDescription = P4U.getRowOfElement(P4U.descArea());
+        let rowOfSelectRole = P4U.getRowOfElement(P4U.roleSelect());
+        P4U.formRowsParent()
+            .insertBefore(rowOfDescription, rowOfSelectRole);
+    }
 }
 
 /**
@@ -456,6 +481,7 @@ class P4uWorklogger {
 
     doTheMagic() {
         this.issueVisual.showIssueDefault();
+        IssueVisual.moveDescArea();
 
         console.log("Attaching an onchange listener to the work description input.");
         $(P4U.descArea()).on("propertychange keyup input cut paste", (e) => {

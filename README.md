@@ -23,6 +23,8 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **1.0.9**
+    - Text box with description was moved under territory selection. 
 - **1.0.8**
     - Role and artifact are filled in based on Jira issue attributes. Mapping rules are hardcoded for FBCE projects.
 - **1.0.5**
