@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.0.9
+// @version      1.0.10
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -513,11 +513,15 @@ class P4uWorklogger {
     }
 
     static fillArtefactIfNeeded(rawJiraIssue) {
-        if (!P4U.artefactField().value) {
+        const artefactField = P4U.artefactField();
+        if (!artefactField.value) {
             let jiraIssue = P4uWorklogger.mapToHumanJiraIssue(rawJiraIssue);
             let artefact = FlowBasedConfiguration.resolveArtefact(jiraIssue);
             if (artefact) {
-                P4U.artefactField().value = artefact;
+                artefactField.value = artefact;
+                //Let the form notice the value update, otherwise the artifact is not submitted
+                artefactField.focus();
+                artefactField.blur();
             }
         }
     }
