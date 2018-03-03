@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.0.10
+// @version      1.0.11
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -375,7 +375,7 @@ class IssueVisual {
             && responseErr.responseHeaders.match(/content-type:\sapplication\/json/) != null) {
             let error = JSON.parse(responseErr.responseText);
             if (error.errorMessages) {
-                IssueVisual.$jiraIssueSummary().empty().append(`<span>Nepodařilo se načíst issue ${key}: ${error.errorMessages.join(", ")}.</span>`);
+                IssueVisual.$jiraIssueSummary().empty().append(`<span>Nepodařilo se načíst issue ${key}. Chyba: ${error.errorMessages.join(", ")}.</span>`);
                 return;
             }
         }
@@ -477,6 +477,7 @@ class P4uWorklogger {
         this.issueVisual = new IssueVisual();
         this.jira4U = new Jira4U();
         this._previousDesctiptionValue = P4U.descArea().value;
+        this._previousIssue = Jira4U.tryParseIssue(this._previousDesctiptionValue);
     }
 
     doTheMagic() {
@@ -587,7 +588,10 @@ class P4uWorklogger {
      */
     workDescriptionChanged(description) {
         const wd = Jira4U.tryParseIssue(description);
-        this.loadJiraIssue(wd);
+        if (this._previousIssue.issueKey !== wd.issueKey) {
+            this._previousIssue = wd;
+            this.loadJiraIssue(wd);
+        }
     }
 
     loadJiraIssue(wd) {
