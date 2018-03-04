@@ -337,7 +337,7 @@ class IssueVisual {
         <div class="vcFormItem vcFormItemShow">
             <div class="vcSpanNormalLeftInline">
                 <div class="LabelBlock">
-                    <table id="jiraWorkTracker" style="float: right; width: 55%; height: 14px">
+                    <table id="jiraWorkTracker" style="float: right; width: 55%; border-collapse: collapse; height: 10px">
                       <tbody>
                         <tr>
                           <td class="wl" id="twl" title="Vykázáno" style="background-color: #51a825; padding: 0; -webkit-transition: width 0.5s; transition-delay: 0.5s; width: 0;"></td>
