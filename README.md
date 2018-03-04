@@ -23,6 +23,9 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **1.1.1**
+    - Added original and remaining estimate bar to Progress tracker.
+    - Fixed issue not loaded when updating a work log record.
 - **1.1.0**
     - Added visual Jira issue work progress tracker.
     - Jira issue is not reloaded unless the issue key is actually changed.
