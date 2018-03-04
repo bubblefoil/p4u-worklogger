@@ -334,6 +334,26 @@ class IssueVisual {
                 </div>
             </div>
         </div>
+        <div class="vcFormItem vcFormItemShow">
+            <div class="vcSpanNormalLeftInline">
+                <div class="LabelBlock">
+                    <table id="jiraWorkTracker" style="float: right; width: 55%; height: 14px">
+                      <tbody>
+                        <tr>
+                          <td class="wl" id="twl" title="Vykázáno" style="background-color: #51a825; padding: 0; -webkit-transition: width 0.5s; transition-delay: 0.5s; width: 0;"></td>
+                          <td class="wr" id="twr" title="Zbývá" style="background-color: #cccccc; padding: 0; -webkit-transition: width 0.5s; transition-delay: 0.5s; width: 100%"></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                </div>
+                <span style="background: url(../webui/images/infotip.gif) center bottom no-repeat"></span>
+            </div>
+            <div class="vcSpanNormalRightInline">
+                <div>
+                    <span id="parsedJiraIssue"></span>
+                </div>
+            </div>
+        </div>
         `);
         const logWorkEnableCheckbox = document.getElementById("jiraLogWorkEnabled");
         logWorkEnableCheckbox.onclick = () => {
@@ -354,6 +374,22 @@ class IssueVisual {
      */
     showIssue(issue) {
         IssueVisual.$jiraIssueSummary().empty().append(`<a href="${jiraBrowseIssue}/${issue.key}" target="_blank">${issue.key} - ${issue.fields.summary}</a>`);
+    }
+
+    /**
+     * Display a visual work log time tracker of a JIRA issue in the form.
+     * @param issue The JIRA issue object as fetched from JIRA rest API
+     * @param {number} issue.fields.progress.percent The JIRA issue work progress.
+     */
+    trackWork(issue) {
+        if (issue)
+            document.getElementById('twl').style.width = `${issue.fields.progress.percent}%`;
+        else
+            this.resetWorkTracker();
+    }
+
+    resetWorkTracker() {
+        document.getElementById('twl').style.width = `0%`;
     }
 
     /**
@@ -590,6 +626,7 @@ class P4uWorklogger {
         const wd = Jira4U.tryParseIssue(description);
         if (this._previousIssue.issueKey !== wd.issueKey) {
             this._previousIssue = wd;
+            this.issueVisual.resetWorkTracker();
             this.loadJiraIssue(wd);
         }
     }
@@ -605,6 +642,7 @@ class P4uWorklogger {
                     console.log(`Issue ${key} loaded successfully.`);
                     let rawJiraIssue = JSON.parse(response.responseText);
                     this.issueVisual.showIssue(rawJiraIssue);
+                    this.issueVisual.trackWork(rawJiraIssue);
                     P4uWorklogger.fillArtefactIfNeeded(rawJiraIssue);
                     P4uWorklogger.selectRole(rawJiraIssue);
                 } else {
