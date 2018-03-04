@@ -23,7 +23,8 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
-- **1.0.11**
+- **1.1.0**
+    - Added visual Jira issue work progress tracker.
     - Jira issue is not reloaded unless the issue key is actually changed.
 - **1.0.10**
     - Fixed artifact not submitted if the input was not focused after value update.
