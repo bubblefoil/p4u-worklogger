@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.0.11
+// @version      1.1.1
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
