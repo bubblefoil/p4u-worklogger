@@ -23,6 +23,8 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **1.1.2**
+    - Update IDCC project configuration. Artefact code changed.     
 - **1.1.1**
     - Added original and remaining estimate bar to Progress tracker.
     - Fixed issue not loaded when updating a work log record.
