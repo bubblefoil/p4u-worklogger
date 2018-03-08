@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.1.1
+// @version      1.1.2
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -528,7 +528,7 @@ class FlowBasedConfiguration {
                 if (jiraIssue.type === "Change Request") {
                     return "USYE.IDCC/CR";
                 } else {
-                    return "USYE.FBL1/IDCC_P1";
+                    return "USYE.IDCC/IDCC_MAINSCOPE";
                 }
             } else {
                 return jiraIssue.projectCode;
