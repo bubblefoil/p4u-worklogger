@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.1.2
+// @version      1.1.3
 // @namespace    https://plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -50,6 +50,38 @@ class PageCheck {
 
 }
 
+const jiraIssueLoaderAnimation = `
+<style>
+    .loader {
+        width: 16px;
+        height: 16px;
+        -webkit-animation: spin 2s linear infinite; /* Safari */
+        animation: spin 1.5s linear infinite;
+    }
+
+    /* Safari */
+    @-webkit-keyframes spin {
+        0% {
+            -webkit-transform: rotate(0deg);
+        }
+        100% {
+            -webkit-transform: rotate(360deg);
+        }
+    }
+
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+</style>
+<img class="loader"
+     alt="Loading JIRA issue"
+     src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABT0lEQVQ4y42TIXPCQBCFv4VOaJmJShUKVVVUFVVVqFZV4forEJ1p54pA8CvqqnBVVVGgUDhUVKqiMpOhmeGuoseRlJBhzV3uvby9fbsn1IUyTwBkzJhKWkU5K329mB5N+sAamAOew8amj6ZHgyWvstwdN47k9lCSk/GBZ7NrWgBo/GPX7bhVGa+WMzHB7kgAGBmfNkMgByKUhFbk0nqQMpWUselj6GLwgU+UxOLU38zQAgAhW1rWD9iyoEkC3Fs8R8l72QNhXbjsLRfEaBI0CT9EwIC9c6vDLmhWaLo0CACPDXds+ALgnIHriJCi9wJSMmliAnIeHFmT2IxBoT8zniWpFqgSKUeIkmKpFXPwpz4/5efjg+SRAOE/ZlBFPRQYGZ+cR6BTEtH03CDVCrS5sbsru0YF9PqUErpul/FNxqISqxHY93sqqX3GcanEQvwCwMds8OT4g3wAAAAASUVORK5CYII="/>
+`;
 
 /**
  * Enhances the work log table.
@@ -230,15 +262,16 @@ class Jira4U {
      * @param {string} key JIRA issue key string
      * @param {Function} onload
      * @param {Function} onerror
+     * @param {?Function} onprogress Optional loading progress callback
      */
-    loadIssue(key, onload, onerror) {
+    loadIssue(key, onload, onerror, onprogress) {
         // noinspection JSUnresolvedFunction
         GM_xmlhttpRequest(
             {
                 method: 'GET',
                 headers: {"Accept": "application/json"},
                 url: jiraRestApiUrlIssue.concat("/", key),
-                onreadystatechange: function (res) {
+                onreadystatechange: onprogress || function (res) {
                     console.log("Request state changed to: " + res.readyState);
                 },
                 onload: onload,
@@ -400,6 +433,11 @@ class IssueVisual {
     showIssue(issue) {
         this._issue = issue;
         IssueVisual.$jiraIssueSummary().empty().append(`<a href="${jiraBrowseIssue}/${issue.key}" target="_blank">${issue.key} - ${issue.fields.summary}</a>`);
+        this.trackWork();
+    }
+
+    showIssueLoadingProgress(key, progress) {
+        IssueVisual.$jiraIssueSummary().empty().append(`${jiraIssueLoaderAnimation}`);
         this.trackWork();
     }
 
@@ -710,6 +748,9 @@ class P4uWorklogger {
             }, responseErr => {
                 console.log(`Failed to load issue ${key}. Status: ${responseErr.status}`);
                 this.issueVisual.issueLoadingFailed({key, response: responseErr});
+            }, progress => {
+                console.log(`Loading jira issue ${key}, state: ${progress.readyState}`)
+                this.issueVisual.showIssueLoadingProgress(key, progress);
             });
         } else {
             this.issueVisual.showIssueDefault();
