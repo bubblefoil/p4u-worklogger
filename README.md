@@ -23,6 +23,8 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **2.0.1**
+    - Basic support for new Working Time Management application
 - **1.1.3**
     - JIRA issue loading animation.
 - **1.1.2**

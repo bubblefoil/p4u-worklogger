@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      1.1.3
-// @namespace    https://plus4u.net/
+// @version      2.0.1
+// @namespace    https://uuos9.plus4u.net/
 // @author       bubblefoil
 // @license      MIT
 // @require      https://code.jquery.com/jquery-3.2.1.min.js
@@ -10,7 +10,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @connect      jira.unicorn.eu
-// @match        https://plus4u.net/*
+// @match        https://uuos9.plus4u.net/uu-specialistwtmg01-main/*
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -21,33 +21,16 @@ const jiraRestApiUrl = jiraUrl + '/rest/api/2';
 const jiraRestApiUrlIssue = jiraRestApiUrl + '/issue';
 const jiraIssueKeyPattern = /([A-Z]+-\d+)/;
 
-const $formBody = $("div.info-group > div.info-group-body");
-
 class PageCheck {
 
     isWorkLogFormPage() {
         //Check that the work log page is loaded by querying for some expected elements
-        let artifactTestButton = document.getElementById("sbx113000_tsi_test");
-        if (artifactTestButton == null) {
-            console.log("Not a worklog page, exiting script.");
-            return false;
-        }
-
-        if (!$formBody.length) {
-            return false;
-        }
-
-        let $buttonPanel = $("#standard_form_bar");
-        if (!$buttonPanel.length) {
+        if (document.title !== 'Working Time Management') {
+            console.log("Judging by the page title, this does not seem to be the Working Time Management app. Exiting extension script.");
             return false;
         }
         return true;
     }
-
-    isLogTablePage() {
-        return document.getElementById('table-tsitems') != null;
-    }
-
 }
 
 const jiraIssueLoaderAnimation = `
@@ -108,12 +91,6 @@ class LogTableDecorator {
 }
 
 let pageCheck = new PageCheck();
-if (pageCheck.isLogTablePage()) {
-    console.log("Work log table detected, replacing JIRA issues with links.");
-    LogTableDecorator.findAndLinkifyJiraIssues();
-    // noinspection JSAnnotator
-    return;
-}
 if (!pageCheck.isWorkLogFormPage()) {
     // noinspection JSAnnotator
     return;
@@ -126,21 +103,32 @@ class P4U {
     }
 
     static datePicker() {
-        return document.getElementsByName("terDate")[0]
-            || $("span > input.ues-core-webui-form-dateinput")[0];
+        return document.getElementsByName("date")[0]
+            .lastChild
+            .firstChild
+            .firstChild
+
     }
 
     static timeFrom() {
-        //Depends on the territory and the create/update work log form mode
-        return document.getElementsByName("terTimeFrom")[0]
-            || document.getElementById("ues101")
-            || document.getElementById("ues103");
+        return document.getElementsByName("timeFrom")[0]
+            .lastChild
+            .firstChild
+            .firstChild;
     }
 
     static timeTo() {
-        //Depends on the territory and the create/update work log form mode
-        return document.getElementsByName("terTimeTo")[0]
-            || document.getElementById("TimeTo");
+        return document.getElementsByName("timeTo")[0]
+            .lastChild
+            .firstChild
+            .firstChild;
+    }
+
+    static artefactField() {
+        return document.getElementsByName("subject")[0]
+            .lastChild
+            .firstChild
+            .firstChild;
     }
 
     static dateFrom() {
@@ -154,7 +142,7 @@ class P4U {
     static getDurationSeconds() {
         const dateFrom = P4U.dateFrom();
         const dateTo = P4U.dateTo();
-        if (isNaN(dateFrom.getTime()) || isNaN(dateFrom.getTime())) {
+        if (isNaN(dateFrom.getTime()) || isNaN(dateTo.getTime())) {
             return 0;
         }
         const durationMillis = dateTo - dateFrom;
@@ -162,26 +150,27 @@ class P4U {
     }
 
     static parseDateTime(selectedDate, selectedTime) {
-        const [day, month, year] = selectedDate.split('.');
+        const [day, month, year] = selectedDate.split('/');
         const [hour, minute] = selectedTime.split(':');
-        return new Date(year, month - 1, day, hour, minute);
+        return new Date(year, month - 1, day, hour, minute,0,0);
     }
 
     /** Returns the OK button. It is an &lt;a&gt; element containing a structure of spans. */
     static buttonOk() {
-        return document.getElementById("form-btn-ok").parentElement;
+        return P4U.highRateNode().parentElement
+            .lastChild
+            .firstChild
+            .firstChild
+            .firstChild;
     }
 
     /** Returns the 'Next item' button. It is an &lt;a&gt; element containing a structure of spans, or null in case of work log update. */
     static buttonNextItem() {
-        const innerSpan = document.getElementById("form-btn-next");
-        return (innerSpan) ? innerSpan.parentElement : null;
-    }
-
-    /** Returns the 'Next day' button. It is an &lt;a&gt; element containing a structure of spans, or null in case of work log update. */
-    static buttonNextDayItem() {
-        const innerSpan = document.getElementById("form-btn-next-day");
-        return (innerSpan) ? innerSpan.parentElement : null;
+        return P4U.highRateNode().parentElement
+            .lastChild
+            .lastChild
+            .firstChild
+            .firstChild;
     }
 
     static registerKeyboardShortcuts() {
@@ -211,34 +200,8 @@ class P4U {
         }
     }
 
-    static artefactField() {
-        return document.getElementById("sbx113000_tsi");
-    }
-
-    static roleSelect() {
-        let selects = document.getElementsByTagName("select");
-        let selectsArray = Array.from(selects, select => select);
-        return selectsArray.find(function (select) {
-            return select.name.includes("Role");
-        });
-    }
-
-    static formRowsParent() {
-        return document.getElementsByClassName('info-group-body')[0];
-    }
-
-    static getRowOfElement(element) {
-        while (element.parentElement) {
-            element = element.parentElement;
-            if (element) {
-                if (element.className === "vcFormItemOuterDiv") {
-                    return element;
-                }
-            } else {
-                return null;
-            }
-        }
-        return null;
+    static highRateNode() {
+        return document.getElementsByName("highRate")[0];
     }
 }
 
@@ -366,8 +329,11 @@ class IssueVisual {
 
         const transition = "-webkit-transition: width 0.25s; transition-delay: 0.5s;";
         const trackerStyle = "float: right; width: 55%; border-collapse: collapse; height: 10px; margin-top: 0.2em;";
-        $formBody.append
-        (`<div class="vcFormItem vcFormItemShow">
+
+
+        const jiraBarNode = document.createElement('div');
+        jiraBarNode.innerHTML =
+            (`<div class="vcFormItem vcFormItemShow">
             <div class="vcSpanNormalLeftInline">
                 <div class="LabelBlock">
                     <label for="jiraLogWorkEnabled">Vykázat na <u>J</u>IRA issue</label>
@@ -412,12 +378,17 @@ class IssueVisual {
             </div>
         </div>
         `);
+        IssueVisual.insertAfter(jiraBarNode, P4U.highRateNode());
         const logWorkEnableCheckbox = document.getElementById("jiraLogWorkEnabled");
         logWorkEnableCheckbox.onclick = () => {
             // noinspection JSUnresolvedFunction
             GM_setValue(this._jiraLogWorkEnabledValue, logWorkEnableCheckbox.checked);
             this.trackWork();//To reset the added work log on the tracker
         };
+    }
+
+    static insertAfter(newNode, referenceNode) {
+        referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
     }
 
     isJiraLogWorkEnabled() {
@@ -436,7 +407,7 @@ class IssueVisual {
         this.trackWork();
     }
 
-    showIssueLoadingProgress(key, progress) {
+    showIssueLoadingProgress() {
         IssueVisual.$jiraIssueSummary().empty().append(`${jiraIssueLoaderAnimation}`);
         this.trackWork();
     }
@@ -520,12 +491,6 @@ class IssueVisual {
         return $(document.getElementById("parsedJiraIssue"));
     }
 
-    static moveDescArea() {
-        let rowOfDescription = P4U.getRowOfElement(P4U.descArea());
-        let rowOfSelectRole = P4U.getRowOfElement(P4U.roleSelect());
-        P4U.formRowsParent()
-            .insertBefore(rowOfDescription, rowOfSelectRole);
-    }
 }
 
 /**
@@ -564,33 +529,21 @@ class FlowBasedConfiguration {
         if (FlowBasedConfiguration.isFlowBasedJira(jiraIssue)) {
             if (FlowBasedConfiguration.isIdccProject(jiraIssue)) {
                 if (jiraIssue.type === "Change Request") {
-                    return "USYE.IDCC/CR";
+                    return "UNI-BT:USYE.IDCC/CR";
                 } else {
-                    return "USYE.IDCC/IDCC_MAINSCOPE";
+                    return "UNI-BT:USYE.IDCC/IDCC_MAINSCOPE";
                 }
             } else {
-                return jiraIssue.projectCode;
+                if (jiraIssue.projectCode.startsWith("UNI-BT:")) {
+                    return jiraIssue.projectCode;
+                } else {
+                    return "UNI-BT:" + jiraIssue.projectCode;
+                }
             }
         }
         return null;
     }
 
-    static resolveRole(jiraIssue, roles) {
-        if (FlowBasedConfiguration.isFlowBasedJira(jiraIssue)) {
-            if (FlowBasedConfiguration.isIdccProject(jiraIssue)) {
-                return FlowBasedConfiguration.findRoleWitchContains(roles, "IDCC");
-            } else {
-                return FlowBasedConfiguration.findRoleWitchContains(roles, "FBL1 CGMES");
-            }
-        }
-        return null;
-    }
-
-    static findRoleWitchContains(roles, subStringInRole) {
-        return roles.find(function (role) {
-            return role.text.includes(subStringInRole);
-        });
-    }
 
     static isFlowBasedJira(jiraIssue) {
         return jiraIssue.issueKeyPrefix === "FBLI" || jiraIssue.issueKeyPrefix === "FBCE";
@@ -608,23 +561,21 @@ class P4uWorklogger {
 
     constructor() {
         // Initialize the page decoration.
-        this.issueVisual = new IssueVisual();
+        this.issueVisual = null;
         this.jira4U = new Jira4U();
+        this._previousDesctiptionValue = null;
+        this._previousIssue = null;
+    }
+
+    workLogFormShow() {
+        this.issueVisual = new IssueVisual();
         this._previousDesctiptionValue = P4U.descArea().value;
         this._previousIssue = Jira4U.tryParseIssue(this._previousDesctiptionValue);
+        this.doTheMagic();
     }
 
     doTheMagic() {
         this.issueVisual.showIssueDefault();
-        IssueVisual.moveDescArea();
-
-        console.log("Attaching an onchange listener to the work description input.");
-        $(P4U.descArea()).on("propertychange keyup input cut paste", (e) => {
-            if (this._previousDesctiptionValue !== e.target.value) {
-                this._previousDesctiptionValue = e.target.value;
-                this.workDescriptionChanged(e.target.value);
-            } else console.log("No description change")
-        });
 
         const updateWorkTracker = () => this.issueVisual.trackWork();
         P4U.timeFrom().onblur = updateWorkTracker;
@@ -640,7 +591,7 @@ class P4uWorklogger {
         //The callback function cannot be used directly because the context of 'this' in the callback would be the event target.
         P4U.buttonOk().onclick = () => this.writeWorkLogToJiraIfEnabled();
         if (P4U.buttonNextItem()) P4U.buttonNextItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
-        if (P4U.buttonNextDayItem()) P4U.buttonNextDayItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
+
 
         P4U.registerKeyboardShortcuts();
         P4U.registerAccessKeys();
@@ -664,19 +615,6 @@ class P4uWorklogger {
                 artefactField.blur();
             }
         }
-    }
-
-    static selectRole(rawJiraIssue) {
-        let jiraIssue = P4uWorklogger.mapToHumanJiraIssue(rawJiraIssue);
-        let roles = P4uWorklogger.extractContentFromOptions(P4U.roleSelect());
-        let role = FlowBasedConfiguration.resolveRole(jiraIssue, roles);
-        if (role) {
-            P4U.roleSelect().value = role.value;
-        }
-    }
-
-    static extractContentFromOptions(selectElement) {
-        return Array.from(selectElement.options, option => option);
     }
 
     static mapToHumanJiraIssue(rawJiraIssue) {
@@ -717,12 +655,19 @@ class P4uWorklogger {
         });
     }
 
+    checkWorkDescriptionChanged(description) {
+        if (this._previousDesctiptionValue !== description) {
+            this._previousDesctiptionValue = description;
+            this.workDescriptionChanged(description);
+        } else console.log("No description change")
+    }
+
     /**
      * @param {string} description The new work description value
      */
     workDescriptionChanged(description) {
         const wd = Jira4U.tryParseIssue(description);
-        if (this._previousIssue.issueKey !== wd.issueKey) {
+        if (this._previousIssue.issueKey === null || this._previousIssue.issueKey !== wd.issueKey) {
             this._previousIssue = wd;
             this.loadJiraIssue(wd);
         }
@@ -740,7 +685,6 @@ class P4uWorklogger {
                     let rawJiraIssue = JSON.parse(response.responseText);
                     this.issueVisual.showIssue(rawJiraIssue);
                     P4uWorklogger.fillArtefactIfNeeded(rawJiraIssue);
-                    P4uWorklogger.selectRole(rawJiraIssue);
                 } else {
                     console.log(`Failed to load issue ${key}. Status: ${response.status}`);
                     this.issueVisual.issueLoadingFailed({key, response});
@@ -749,8 +693,8 @@ class P4uWorklogger {
                 console.log(`Failed to load issue ${key}. Status: ${responseErr.status}`);
                 this.issueVisual.issueLoadingFailed({key, response: responseErr});
             }, progress => {
-                console.log(`Loading jira issue ${key}, state: ${progress.readyState}`)
-                this.issueVisual.showIssueLoadingProgress(key, progress);
+                console.log(`Loading jira issue ${key}, state: ${progress.readyState}`);
+                this.issueVisual.showIssueLoadingProgress();
             });
         } else {
             this.issueVisual.showIssueDefault();
@@ -759,4 +703,74 @@ class P4uWorklogger {
 
 }
 
-new P4uWorklogger().doTheMagic();
+const workLogger = new P4uWorklogger();
+
+class BrickObserver {
+
+    constructor() {
+        this.observeOptions = {
+            attributes: false,
+            characterData: false,
+            childList: true,
+            subtree: true,
+            attributeOldValue: false,
+            characterDataOldValue: false,
+        };
+
+        const hasAddedNodes = mutation => mutation.addedNodes.length > 0;
+
+        this.mutationObserver = new MutationObserver(function (mutations) {
+
+            mutations
+            // .filter(hasAddedNodes)
+                .forEach((mutation) => {
+                    // console.log(mutation); //I suppose to use this functionality frequently
+
+                    // description change
+                    if (mutation.target.type === "textarea" && mutation.target.name === "description") {
+                        workLogger.checkWorkDescriptionChanged(mutation.target.textContent);
+                    }
+
+                    function isWorkLogForm(mutation) {
+                        if (mutation.target.className !== "uu5-bricks-modal-body") {
+                            return false;
+                        }
+
+                        for (const childNode of mutation.target.childNodes) {
+                            if (childNode.classList.contains("uu-specialistwtm-create-timesheet-item-modal-container")) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+
+                    if (isWorkLogForm(mutation)) {
+                        workLogger.workLogFormShow();
+                    }
+
+
+                });
+        });
+
+        this.pageReadyMutationOberver = new MutationObserver(function (mutations) {
+            const isMainPageAddition = (mutation) => hasAddedNodes(mutation) && mutation.type === 'childList' && mutation.target.matches('div.uu5-common-div.uu5-bricks-page-system-layer.plus4u5-app-page-system-layer-wrapper');
+            if (mutations.some(isMainPageAddition)) {
+                swapObservers();
+            }
+        });
+
+        let swapObservers = () => {
+            if (this.pageReadyMutationOberver) {
+                this.pageReadyMutationOberver.disconnect();
+            }
+            this.mutationObserver.observe(document.body, this.observeOptions);
+        };
+        this.pageReadyMutationOberver.observe(document.body, this.observeOptions);
+    }
+
+    observe() {
+    }
+}
+
+const brickObserver = new BrickObserver();
+brickObserver.observe();
