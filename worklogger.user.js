@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.0.1
+// @version      2.0.2
 // @namespace    https://uuos9.plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -98,6 +98,10 @@ if (!pageCheck.isWorkLogFormPage()) {
 
 class P4U {
 
+    static language(){
+        return document.getElementsByClassName("uu5-bricks-language-selector-code-text")[0].textContent;
+    }
+
     static descArea() {
         return document.getElementsByTagName("textarea")[0];
     }
@@ -150,7 +154,8 @@ class P4U {
     }
 
     static parseDateTime(selectedDate, selectedTime) {
-        const [day, month, year] = selectedDate.split('/');
+        let saparator = P4U.language() === "cs" ? ". ": "/";
+        const [day, month, year] = selectedDate.split(saparator);
         const [hour, minute] = selectedTime.split(':');
         return new Date(year, month - 1, day, hour, minute,0,0);
     }
