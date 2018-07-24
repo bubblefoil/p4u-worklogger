@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.0.2
+// @version      2.0.3
 // @namespace    https://uuos9.plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -98,7 +98,7 @@ if (!pageCheck.isWorkLogFormPage()) {
 
 class P4U {
 
-    static language(){
+    static language() {
         return document.getElementsByClassName("uu5-bricks-language-selector-code-text")[0].textContent;
     }
 
@@ -154,10 +154,10 @@ class P4U {
     }
 
     static parseDateTime(selectedDate, selectedTime) {
-        let saparator = P4U.language() === "cs" ? ". ": "/";
+        let saparator = P4U.language() === "cs" ? ". " : "/";
         const [day, month, year] = selectedDate.split(saparator);
         const [hour, minute] = selectedTime.split(':');
-        return new Date(year, month - 1, day, hour, minute,0,0);
+        return new Date(year, month - 1, day, hour, minute, 0, 0);
     }
 
     /** Returns the OK button. It is an &lt;a&gt; element containing a structure of spans. */
@@ -539,10 +539,12 @@ class FlowBasedConfiguration {
                     return "UNI-BT:USYE.IDCC/IDCC_MAINSCOPE";
                 }
             } else {
-                if (jiraIssue.projectCode.startsWith("UNI-BT:")) {
-                    return jiraIssue.projectCode;
-                } else {
-                    return "UNI-BT:" + jiraIssue.projectCode;
+                if (jiraIssue.projectCode) {
+                    if (jiraIssue.projectCode.startsWith("UNI-BT:")) {
+                        return jiraIssue.projectCode;
+                    } else {
+                        return "UNI-BT:" + jiraIssue.projectCode;
+                    }
                 }
             }
         }
