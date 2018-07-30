@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.0.3
+// @version      2.0.4
 // @namespace    https://uuos9.plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -161,7 +161,7 @@ class P4U {
     }
 
     /** Returns the OK button. It is an &lt;a&gt; element containing a structure of spans. */
-    static buttonOk() {
+    static buttonNextItem() {
         return P4U.highRateNode().parentElement
             .lastChild
             .firstChild
@@ -170,7 +170,7 @@ class P4U {
     }
 
     /** Returns the 'Next item' button. It is an &lt;a&gt; element containing a structure of spans, or null in case of work log update. */
-    static buttonNextItem() {
+    static  buttonOk() {
         return P4U.highRateNode().parentElement
             .lastChild
             .lastChild
@@ -597,7 +597,7 @@ class P4uWorklogger {
         //Intercept form's confirmation buttons.
         //The callback function cannot be used directly because the context of 'this' in the callback would be the event target.
         P4U.buttonOk().onclick = () => this.writeWorkLogToJiraIfEnabled();
-        if (P4U.buttonNextItem()) P4U.buttonNextItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
+        P4U.buttonNextItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
 
 
         P4U.registerKeyboardShortcuts();

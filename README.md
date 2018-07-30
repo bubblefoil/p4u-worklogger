@@ -23,6 +23,8 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **2.0.4**
+    - Fix send work to Jira on Save and Next button
 - **2.0.3**
     - Fix null pointer issue in Flow based Day ahead configuration
 - **2.0.2**
