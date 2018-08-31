@@ -16,9 +16,10 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ## Installation
-* Install ([Tampermonkey](https://tampermonkey.net/)), the user script manager
- extension into your browser. The ([Greasemonkey](https://www.greasespot.net/) is not supported. 
-* Check the manual of the script manager for further instructions
+* Install [Tampermonkey](https://tampermonkey.net), the user script manager
+ extension into your browser. [Greasemonkey](https://www.greasespot.net) is not supported. 
+* Go to the script page at [greasyfork.org](https://greasyfork.org/en/scripts/36386-p4u-worklogger) or [openuserjs.org](https://openuserjs.org/scripts/bubblefoil/p4u-worklogger)
+* There should be a button to install/update p4u-worklogger
 
 ***
 
