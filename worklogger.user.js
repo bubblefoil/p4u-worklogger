@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.0.4
+// @version      2.0.5
 // @namespace    https://uuos9.plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -595,11 +595,13 @@ class P4uWorklogger {
         }
 
         //Intercept form's confirmation buttons.
+        this.extendButtons();
+    }
+
+    extendButtons() {
         //The callback function cannot be used directly because the context of 'this' in the callback would be the event target.
         P4U.buttonOk().onclick = () => this.writeWorkLogToJiraIfEnabled();
         P4U.buttonNextItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
-
-
         P4U.registerKeyboardShortcuts();
         P4U.registerAccessKeys();
     }
@@ -652,6 +654,8 @@ class P4uWorklogger {
             comment: wd.descriptionText,
             onSuccess: (res) => {
                 console.log("Work was successfully logged to JIRA.", JSON.parse(res.responseText));
+                //The buttons are probably refreshed. They loose listeners after adding a worklog.
+                setTimeout(() => this.extendButtons(), 500);
             },
             onError: (err) => {
                 console.log("Failed to log work to JIRA. ", err);
