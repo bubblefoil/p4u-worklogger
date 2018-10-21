@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.1.1
+// @version      2.1.2
 // @namespace    https://uuos9.plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -215,13 +215,17 @@ class WtmWorktableView {
             return;
         }
         console.log('WTM Extension: enhancing work table');
+        const today = new Date();
+        const dayOfWeek = (today.getDay() + 6) % 7;
+        const lastMonday = Math.max(today.getDate() - dayOfWeek, 1);
+        const nextSunday = Math.min(lastMonday + 6, 31);
         WtmWorktableModel.monthlyDetailTopTimeColumn()
             .insertAdjacentHTML(
                 'beforeend',
                 `<div id="wtt-time-range-form" class="uu5-common-div uu-specialistwtm-worker-monthly-detail-top-time-column">
                 <span class="uu5-bricks-span uu5-bricks-lsi-item uu5-bricks-lsi uu-specialistwtm-worker-monthly-detail-top-total-time-label" style="width: max-content; min-width: 8em;">${_t('wtm.table.day-range.label')}</span>
-                <input class="uu5-bricks-text uu5-common-text uu-specialistwtm-worker-monthly-detail-table-form-date" type="number" id="wtt-day-from" value="1" min="1" max="31">
-                <input class="uu5-bricks-text uu5-common-text uu-specialistwtm-worker-monthly-detail-table-form-date" type="number" id="wtt-day-to" value="31" min="1" max="31">
+                <input class="uu5-bricks-text uu5-common-text uu-specialistwtm-worker-monthly-detail-table-form-date" type="number" id="wtt-day-from" value="${lastMonday}" min="1" max="31" style="width: 4em; margin: 0.25em">
+                <input class="uu5-bricks-text uu5-common-text uu-specialistwtm-worker-monthly-detail-table-form-date" type="number" id="wtt-day-to" value="${nextSunday}" min="1" max="31" style="width: 4em; margin: 0.25em">
                 <span id="wtt-time-in-range-sum" class="uu5-bricks-span uu-specialistwtm-worker-monthly-detail-top-total-time">${WtmWorktableView.printMinutes(0)}</span>
                 </div>`
             );
@@ -231,7 +235,6 @@ class WtmWorktableView {
         this.getDayToInput().onclick = () => this.updateSum();
         this.updateSum().catch((e) => console.warn(e));
     }
-
 
     getDayToInput() {
         return document.getElementById('wtt-day-to');
