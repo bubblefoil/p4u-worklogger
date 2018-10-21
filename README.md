@@ -24,6 +24,8 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **2.0.6**
+    - Minor form style update, new Jira logo
 - **2.0.5**
     - Fix only first item logged to Jira
 - **2.0.4**

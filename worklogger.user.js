@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.0.5
+// @version      2.0.6
 // @namespace    https://uuos9.plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -35,7 +35,7 @@ class PageCheck {
 
 const jiraIssueLoaderAnimation = `
 <style>
-    .loader {
+    .progress-spinner {
         width: 16px;
         height: 16px;
         -webkit-animation: spin 2s linear infinite; /* Safari */
@@ -61,9 +61,21 @@ const jiraIssueLoaderAnimation = `
         }
     }
 </style>
-<img class="loader"
-     alt="Loading JIRA issue"
-     src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABT0lEQVQ4y42TIXPCQBCFv4VOaJmJShUKVVVUFVVVqFZV4forEJ1p54pA8CvqqnBVVVGgUDhUVKqiMpOhmeGuoseRlJBhzV3uvby9fbsn1IUyTwBkzJhKWkU5K329mB5N+sAamAOew8amj6ZHgyWvstwdN47k9lCSk/GBZ7NrWgBo/GPX7bhVGa+WMzHB7kgAGBmfNkMgByKUhFbk0nqQMpWUselj6GLwgU+UxOLU38zQAgAhW1rWD9iyoEkC3Fs8R8l72QNhXbjsLRfEaBI0CT9EwIC9c6vDLmhWaLo0CACPDXds+ALgnIHriJCi9wJSMmliAnIeHFmT2IxBoT8zniWpFqgSKUeIkmKpFXPwpz4/5efjg+SRAOE/ZlBFPRQYGZ+cR6BTEtH03CDVCrS5sbsru0YF9PqUErpul/FNxqISqxHY93sqqX3GcanEQvwCwMds8OT4g3wAAAAASUVORK5CYII="/>
+<svg class="progress-spinner" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 75.76 75.76">
+    <defs>
+        <style>.cls-2 { fill: #2684ff; } .cls-3 { fill: url(#linear-gradient); } .cls-4 { fill: url(#linear-gradient-2); }</style>
+        <linearGradient id="linear-gradient" x1="34.64" y1="15.35" x2="19" y2="30.99" gradientUnits="userSpaceOnUse"><stop offset="0.18" stop-color="#0052cc"/><stop offset="1" stop-color="#2684ff"/></linearGradient>
+        <linearGradient id="linear-gradient-2" x1="38.78" y1="60.28" x2="54.39" y2="44.67" xlink:href="#linear-gradient"/>
+    </defs>
+    <title>Connecting to Jira...</title>
+    <g id="Layer_2">
+        <g id="Blue">
+            <path class="cls-2" d="M72.4,35.76,39.8,3.16,36.64,0h0L12.1,24.54h0L.88,35.76A3,3,0,0,0,.88,40L23.3,62.42,36.64,75.76,61.18,51.22l.38-.38L72.4,40A3,3,0,0,0,72.4,35.76ZM36.64,49.08l-11.2-11.2,11.2-11.2,11.2,11.2Z"/>
+            <path class="cls-3" d="M36.64,26.68A18.86,18.86,0,0,1,36.56.09L12.05,24.59,25.39,37.93,36.64,26.68Z"/>
+            <path class="cls-4" d="M47.87,37.85,36.64,49.08a18.86,18.86,0,0,1,0,26.68h0L61.21,51.19Z"/>
+        </g>
+    </g>
+</svg>
 `;
 
 /**
@@ -96,7 +108,7 @@ if (!pageCheck.isWorkLogFormPage()) {
     return;
 }
 
-class P4U {
+class Wtm {
 
     static language() {
         return document.getElementsByClassName("uu5-bricks-language-selector-code-text")[0].textContent;
@@ -128,7 +140,7 @@ class P4U {
             .firstChild;
     }
 
-    static artefactField() {
+    static artifactField() {
         return document.getElementsByName("subject")[0]
             .lastChild
             .firstChild
@@ -144,8 +156,8 @@ class P4U {
     }
 
     static getDurationSeconds() {
-        const dateFrom = P4U.dateFrom();
-        const dateTo = P4U.dateTo();
+        const dateFrom = Wtm.dateFrom();
+        const dateTo = Wtm.dateTo();
         if (isNaN(dateFrom.getTime()) || isNaN(dateTo.getTime())) {
             return 0;
         }
@@ -153,16 +165,20 @@ class P4U {
         return durationMillis > 0 ? durationMillis / 1000 : 0;
     }
 
+    static parseDate(selectedDate) {
+        const dateMatch = selectedDate.match(/(\d\d)[\.|/](\d\d)[\.|/](\d{4})/);
+        return dateMatch && dateMatch.slice(1).map(Number) || [NaN, NaN, NaN];
+    }
+
     static parseDateTime(selectedDate, selectedTime) {
-        let saparator = P4U.language() === "cs" ? ". " : "/";
-        const [day, month, year] = selectedDate.split(saparator);
-        const [hour, minute] = selectedTime.split(':');
+        const [day, month, year] = this.parseDate(selectedDate);
+        const [hour, minute] = selectedTime.split(':').map(Number);
         return new Date(year, month - 1, day, hour, minute, 0, 0);
     }
 
     /** Returns the OK button. It is an &lt;a&gt; element containing a structure of spans. */
     static buttonNextItem() {
-        return P4U.highRateNode().parentElement
+        return Wtm.highRateNode().parentElement
             .lastChild
             .firstChild
             .firstChild
@@ -171,7 +187,7 @@ class P4U {
 
     /** Returns the 'Next item' button. It is an &lt;a&gt; element containing a structure of spans, or null in case of work log update. */
     static  buttonOk() {
-        return P4U.highRateNode().parentElement
+        return Wtm.highRateNode().parentElement
             .lastChild
             .lastChild
             .firstChild
@@ -179,10 +195,10 @@ class P4U {
     }
 
     static registerKeyboardShortcuts() {
-        P4U.buttonOk().title = "Ctrl + Enter";
+        Wtm.buttonOk().title = "Ctrl + Enter";
         $(document).on("keydown", e => {
             if (e.keyCode === 13 && e.ctrlKey) {
-                P4U.buttonOk().click();
+                Wtm.buttonOk().click();
             }
         });
     }
@@ -240,7 +256,7 @@ class Jira4U {
                 headers: {"Accept": "application/json"},
                 url: jiraRestApiUrlIssue.concat("/", key),
                 onreadystatechange: onprogress || function (res) {
-                    console.log("Request state changed to: " + res.readyState);
+                    console.log("Request state: " + res.readyState);
                 },
                 onload: onload,
                 onerror: onerror
@@ -328,62 +344,52 @@ class IssueVisual {
     addToForm() {
         // noinspection JSUnresolvedFunction
         const logWorkEnabled = GM_getValue(this._jiraLogWorkEnabledValue, true);
-        const checked = logWorkEnabled ? `checked="checked"` : "";
+        const checked = logWorkEnabled ? `checked="checked"` : '';
         console.log("Adding JIRA Visual into form");
         // noinspection CssUnknownTarget
 
         const transition = "-webkit-transition: width 0.25s; transition-delay: 0.5s;";
-        const trackerStyle = "float: right; width: 55%; border-collapse: collapse; height: 10px; margin-top: 0.2em;";
+        const trackerStyle = "width: 100%; border-collapse: collapse; height: 0.75em; margin-top: 0.4em;";
 
-
+        //.uu5-forms-label uu5-forms-input-m
         const jiraBarNode = document.createElement('div');
-        jiraBarNode.innerHTML =
-            (`<div class="vcFormItem vcFormItemShow">
-            <div class="vcSpanNormalLeftInline">
-                <div class="LabelBlock">
-                    <label for="jiraLogWorkEnabled">Vykázat na <u>J</u>IRA issue</label>
-                    <input type="checkbox" id="jiraLogWorkEnabled" ${checked} accesskey="j" style=" margin-bottom: 3px; vertical-align: bottom; ">
-                </div>
-                <span style="background: url(../webui/images/infotip.gif) center bottom no-repeat"></span>
+        jiraBarNode.innerHTML = (`
+        <div>
+            <div>
+                <input type="checkbox" id="jiraLogWorkEnabled" ${checked} accesskey="j" style=" margin-bottom: 3px; vertical-align: bottom; ">
+                <label for="jiraLogWorkEnabled" class="uu5-forms-input-m">Vykázat na <u>J</u>IRA issue</label>
             </div>
-            <div class="vcSpanNormalRightInline">
-                <div>
-                    <span id="parsedJiraIssue"></span>
-                </div>
+            <div>
+                <span id="parsedJiraIssue" class="uu5-forms-input-m"></span>
             </div>
         </div>
-        <div class="vcFormItem vcFormItemShow">
-            <div class="vcSpanNormalLeftInline">
-                <div class="LabelBlock">
-                    <table id="jiraWorkTrackerOriginal" style="${trackerStyle}">
-                      <tbody>
-                        <tr>
-                          <td class="workTracker wtl" id="jiraOrigEstimate" title="Původní odhad:" style="background-color: #89AFD7; padding: 0; ${transition} width: 0;"></td>
-                          <td class="workTracker wtr" id="jiraRemainEstimate" title="Zbývající odhad:" style="background-color: #ec8e00; padding: 0; ${transition} width: 0;"></td>
-                          <td class="workTracker wt" title="Původní odhad" style="background-color: #cccccc; padding: 0; ${transition} width: 100%"></td>
-                        </tr>
-                      </tbody>
-                    </table>
-                    <table id="jiraWorkTrackerLogged" style="${trackerStyle}">
-                      <tbody>
-                        <tr>
-                          <td class="workTracker wtl" id="jiraWorkLogged" title="Vykázáno:" style="background-color: #51a825; padding: 0; ${transition} width: 0;"></td>
-                          <td class="workTracker wtn" id="jiraWorkLogging" title="Nový výkaz" style="background-color: #51A82580; padding: 0; /*${transition}*/ width: 0"></td>
-                          <td class="workTracker wtr" id="jiraWorkRemainTotal" title="Zbývá" style="background-color: #cccccc; padding: 0; /*${transition} */width: 100%"></td>
-                        </tr>
-                      </tbody>
-                    </table>
-                </div>
-                <span style="background: url(../webui/images/infotip.gif) center bottom no-repeat"></span>
+        <div>
+            <div>
+                <table id="jiraWorkTrackerOriginal" style="${trackerStyle}">
+                  <tbody>
+                    <tr>
+                      <td class="workTracker wtl" id="jiraOrigEstimate" title="Původní odhad:" style="background-color: #89AFD7; padding: 0; ${transition} width: 0;"></td>
+                      <td class="workTracker wtr" id="jiraRemainEstimate" title="Zbývající odhad:" style="background-color: #ec8e00; padding: 0; ${transition} width: 0;"></td>
+                      <td class="workTracker wt" title="Původní odhad" style="background-color: #cccccc; padding: 0; ${transition} width: 100%"></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <table id="jiraWorkTrackerLogged" style="${trackerStyle}">
+                  <tbody>
+                    <tr>
+                      <td class="workTracker wtl" id="jiraWorkLogged" title="Vykázáno:" style="background-color: #51a825; padding: 0; ${transition} width: 0;"></td>
+                      <td class="workTracker wtn" id="jiraWorkLogging" title="Nový výkaz" style="background-color: #51A82580; padding: 0; /*${transition}*/ width: 0"></td>
+                      <td class="workTracker wtr" id="jiraWorkRemainTotal" title="Zbývá" style="background-color: #cccccc; padding: 0; /*${transition} */width: 100%"></td>
+                    </tr>
+                  </tbody>
+                </table>
             </div>
-            <div class="vcSpanNormalRightInline">
-                <div>
-                    <span id="parsedJiraIssue"></span>
-                </div>
+            <div>
+                <span id="parsedJiraIssue"></span>
             </div>
         </div>
         `);
-        IssueVisual.insertAfter(jiraBarNode, P4U.highRateNode());
+        IssueVisual.insertAfter(jiraBarNode, Wtm.highRateNode());
         const logWorkEnableCheckbox = document.getElementById("jiraLogWorkEnabled");
         logWorkEnableCheckbox.onclick = () => {
             // noinspection JSUnresolvedFunction
@@ -433,7 +439,7 @@ class IssueVisual {
             const orig = this._issue.fields.timetracking.originalEstimateSeconds || 0;
             const remain = this._issue.fields.timetracking.remainingEstimateSeconds || 0;
             const logged = this._issue.fields.timetracking.timeSpentSeconds || 0;
-            const added = this.isJiraLogWorkEnabled() ? P4U.getDurationSeconds() : 0;
+            const added = this.isJiraLogWorkEnabled() ? Wtm.getDurationSeconds() : 0;
             const total = Math.max(orig + remain, logged + added);
             const percentOfTotal = (x) => total > 0 ? x / total * 100 : 0;
             const setWidth = (id, w) => {
@@ -489,7 +495,7 @@ class IssueVisual {
                 return;
             }
         }
-        IssueVisual.$jiraIssueSummary().empty().append(`<span>Něco se přihodilo. Asi budete muset vykázat do JIRA ručně.</span>`);
+        IssueVisual.$jiraIssueSummary().empty().append(`<span>Něco se přihodilo. Budete muset vykázat do JIRA ručně.</span>`);
     }
 
     static $jiraIssueSummary() {
@@ -576,7 +582,7 @@ class P4uWorklogger {
 
     workLogFormShow() {
         this.issueVisual = new IssueVisual();
-        this._previousDesctiptionValue = P4U.descArea().value;
+        this._previousDesctiptionValue = Wtm.descArea().value;
         this._previousIssue = Jira4U.tryParseIssue(this._previousDesctiptionValue);
         this.doTheMagic();
     }
@@ -585,12 +591,12 @@ class P4uWorklogger {
         this.issueVisual.showIssueDefault();
 
         const updateWorkTracker = () => this.issueVisual.trackWork();
-        P4U.timeFrom().onblur = updateWorkTracker;
-        P4U.timeTo().onblur = updateWorkTracker;
+        Wtm.timeFrom().onblur = updateWorkTracker;
+        Wtm.timeTo().onblur = updateWorkTracker;
 
         //In case of a Work log update, there may already be some work description.
-        if (P4U.descArea().value) {
-            const wd = Jira4U.tryParseIssue(P4U.descArea().value);
+        if (Wtm.descArea().value) {
+            const wd = Jira4U.tryParseIssue(Wtm.descArea().value);
             this.loadJiraIssue(wd);
         }
 
@@ -600,10 +606,10 @@ class P4uWorklogger {
 
     extendButtons() {
         //The callback function cannot be used directly because the context of 'this' in the callback would be the event target.
-        P4U.buttonOk().onclick = () => this.writeWorkLogToJiraIfEnabled();
-        P4U.buttonNextItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
-        P4U.registerKeyboardShortcuts();
-        P4U.registerAccessKeys();
+        Wtm.buttonOk().onclick = () => this.writeWorkLogToJiraIfEnabled();
+        Wtm.buttonNextItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
+        Wtm.registerKeyboardShortcuts();
+        Wtm.registerAccessKeys();
     }
 
     writeWorkLogToJiraIfEnabled() {
@@ -613,7 +619,7 @@ class P4uWorklogger {
     }
 
     static fillArtefactIfNeeded(rawJiraIssue) {
-        const artefactField = P4U.artefactField();
+        const artefactField = Wtm.artifactField();
         if (!artefactField.value) {
             let jiraIssue = P4uWorklogger.mapToHumanJiraIssue(rawJiraIssue);
             let artefact = FlowBasedConfiguration.resolveArtefact(jiraIssue);
@@ -637,15 +643,15 @@ class P4uWorklogger {
     }
 
     writeWorkLogToJira() {
-        const wd = Jira4U.tryParseIssue(P4U.descArea().value);
+        const wd = Jira4U.tryParseIssue(Wtm.descArea().value);
         if (!wd.issueKey) {
             return;
         }
-        const durationSeconds = P4U.getDurationSeconds();
+        const durationSeconds = Wtm.getDurationSeconds();
         if (durationSeconds <= 0) {
             return 0;
         }
-        const dateFrom = P4U.dateFrom();
+        const dateFrom = Wtm.dateFrom();
         console.log(`Logging ${durationSeconds} minutes of work on ${wd.issueKey}`);
         this.jira4U.logWork({
             key: wd.issueKey,
@@ -704,8 +710,10 @@ class P4uWorklogger {
                 console.log(`Failed to load issue ${key}. Status: ${responseErr.status}`);
                 this.issueVisual.issueLoadingFailed({key, response: responseErr});
             }, progress => {
+                if (progress.readyState === 1) {
+                    this.issueVisual.showIssueLoadingProgress();
+                }
                 console.log(`Loading jira issue ${key}, state: ${progress.readyState}`);
-                this.issueVisual.showIssueLoadingProgress();
             });
         } else {
             this.issueVisual.showIssueDefault();
@@ -728,14 +736,18 @@ class BrickObserver {
             characterDataOldValue: false,
         };
 
+        this.mutationObserver = null;
+        this.pageReadyMutationOberver = null;
+    }
+
+    observe() {
         const hasAddedNodes = mutation => mutation.addedNodes.length > 0;
 
         this.mutationObserver = new MutationObserver(function (mutations) {
-
             mutations
             // .filter(hasAddedNodes)
                 .forEach((mutation) => {
-                    // console.log(mutation); //I suppose to use this functionality frequently
+                    // console.log(mutation); //I expect to use this functionality frequently
 
                     // description change
                     if (mutation.target.type === "textarea" && mutation.target.name === "description") {
@@ -746,7 +758,6 @@ class BrickObserver {
                         if (mutation.target.className !== "uu5-bricks-modal-body") {
                             return false;
                         }
-
                         for (const childNode of mutation.target.childNodes) {
                             if (childNode.classList.contains("uu-specialistwtm-create-timesheet-item-modal-container")) {
                                 return true;
@@ -758,11 +769,10 @@ class BrickObserver {
                     if (isWorkLogForm(mutation)) {
                         workLogger.workLogFormShow();
                     }
-
-
                 });
         });
 
+        //During page loading, there are tons of mutations. This observer is active until the main page is added, then it disconnects and activates the actual observer.
         this.pageReadyMutationOberver = new MutationObserver(function (mutations) {
             const isMainPageAddition = (mutation) => hasAddedNodes(mutation) && mutation.type === 'childList' && mutation.target.matches('div.uu5-common-div.uu5-bricks-page-system-layer.plus4u5-app-page-system-layer-wrapper');
             if (mutations.some(isMainPageAddition)) {
@@ -777,9 +787,6 @@ class BrickObserver {
             this.mutationObserver.observe(document.body, this.observeOptions);
         };
         this.pageReadyMutationOberver.observe(document.body, this.observeOptions);
-    }
-
-    observe() {
     }
 }
 
