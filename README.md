@@ -1,15 +1,16 @@
 # Plus4U++ aka p4u-worklogger
-The browser user script which enhances the Plus4U work log page.
+The browser user script which enhances the Working Time Management.
 
 ***
 
 ## Features
-- Loads and displays summary of a a JIRA issue, whose key is mentioned in the work description, as a link.
-- Writes a work log record directly into JIRA the moment it is created at the Plus4U work log page.
-- Adds mnemonics to the form buttons. (See access keys usage in your OS/browser.)
+- Loads and displays summary of a a JIRA issue. Type the issue key in the work description. Following text will be the JIRA work log comment.
+- Writes a work log record directly into JIRA the moment it is created in Working Time Management.
+- Adds some keyboard shortcuts & mnemonics. (See access keys usage in your OS/browser.)
+- Calculates sum of working hour for custom range of days within selected month.
 
 ## In the future
-Thanks to JIRA REST API flexibility, the user script may integrate JIRA issue tracker into the Plus4U work log page much more tightly.
+Thanks to JIRA REST API flexibility, the user script may integrate JIRA issue tracker into Working Time Management much more tightly.
 Feel free to suggest new features at [GitHub Issues page](https://github.com/bubblefoil/p4u-worklogger/issues).
 Eventually this script may come packed as a standalone browser extension.
 
@@ -24,6 +25,8 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **2.1.1**
+    - New feature: Sum of working hours for selected period
 - **2.0.6**
     - Minor form style update, new Jira logo
 - **2.0.5**

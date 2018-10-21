@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.0.6
+// @version      2.1.1
 // @namespace    https://uuos9.plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -107,12 +107,156 @@ if (!pageCheck.isWorkLogFormPage()) {
     // noinspection JSAnnotator
     return;
 }
+const wtmMessage = {
+    cs: {
+        'wtm.table.day-range.label': 'ČAS MEZI DNY:',
+    },
+    en: {
+        'wtm.table.day-range.label': 'TIME BETWEEN DAYS:'
+    }
+};
 
-class Wtm {
+const _t = function (messageCode) {
+    if (!messageCode) {
+        console.warn('Invalid I18N message code: ', messageCode);
+        return '?';
+    }
+    const getBundle = function () {
+        const language = WtmWorktableModel.language();
+        if (wtmMessage.hasOwnProperty(language)) {
+            return wtmMessage[language];
+        }
+        return wtmMessage.cs
+    };
+    const bundle = getBundle();
+    if (!bundle.hasOwnProperty(messageCode)) {
+        console.warn(`I18N message "${messageCode}" is not defined for "${WtmWorktableModel.language()}`);
+        return messageCode;
+    }
+    return bundle[messageCode];
+};
+
+/**
+ * Access methods to the WTM time table view.
+ */
+class WtmWorktableModel {
 
     static language() {
         return document.getElementsByClassName("uu5-bricks-language-selector-code-text")[0].textContent;
     }
+
+    static monthlyDetailTopTimeColumn() {
+        return document.querySelector('.uu5-common-div .uu-specialistwtm-worker-monthly-detail-top-time-column');
+    }
+
+    static timeTable() {
+        return document.querySelector('table.uu5-bricks-table-table');
+    }
+
+    static getDay(tableRow) {
+        const dateCellText = tableRow.cells[1].innerText;
+        const match = dateCellText.match(/\d\d[\.|\/](\d\d)[\.|\/]\d{4}/);
+        return match && match[1] || -1;
+    }
+
+    static getTimeInMinutes(tableRow) {
+        const dateCellText = tableRow.cells[2].innerText;
+        const match = dateCellText.match(/(\d\d)[:](\d\d)/);
+        return match && 60 * Number(match[1]) + Number(match[2]) || NaN;
+    }
+
+    /**
+     * Filters table rows by given range of days of month.
+     * @param {number} dayFrom
+     * @param {number} dayTo
+     * @return {Promise<HTMLTableRowElement[]>}
+     */
+    static rowsBetweenDays(dayFrom, dayTo) {
+        return new Promise(resolve => {
+            const timeTable = WtmWorktableModel.timeTable();
+            const firstDay = Math.min(dayFrom, dayTo);
+            const lastDay = Math.max(dayFrom, dayTo);
+            const rowsInRange = [].filter.call(timeTable.rows, (row, idx) => {
+                return idx > 0 && firstDay <= WtmWorktableModel.getDay(row) && WtmWorktableModel.getDay(row) <= lastDay;
+            });
+            resolve(rowsInRange);
+        })
+    }
+
+    /**
+     *
+     * @param dayFrom
+     * @param dayTo
+     * @return {Promise<number>} Sum of time in selected day range in minutes.
+     */
+    static minutesBetween(dayFrom, dayTo) {
+        return this
+            .rowsBetweenDays(dayFrom, dayTo)
+            .then((rows) => new Promise(resolve => {
+                const minutesTotal = rows
+                    .map((row) => WtmWorktableModel.getTimeInMinutes(row))
+                    .reduce((acc, minutes) => acc + minutes, 0);
+                resolve(minutesTotal);
+            }));
+    }
+}
+
+/**
+ * Takes care of Time table extension view.
+ */
+class WtmWorktableView {
+
+    constructor() {
+    }
+
+    worktableSumViewShow() {
+        if (document.getElementById('wtt-time-range-form')) {
+            console.log('WTM Extension: Work table already enhanced.');
+            return;
+        }
+        console.log('WTM Extension: enhancing work table');
+        WtmWorktableModel.monthlyDetailTopTimeColumn()
+            .insertAdjacentHTML(
+                'beforeend',
+                `<div id="wtt-time-range-form" class="uu5-common-div uu-specialistwtm-worker-monthly-detail-top-time-column">
+                <span class="uu5-bricks-span uu5-bricks-lsi-item uu5-bricks-lsi uu-specialistwtm-worker-monthly-detail-top-total-time-label" style="width: max-content; min-width: 8em;">${_t('wtm.table.day-range.label')}</span>
+                <input class="uu5-bricks-text uu5-common-text uu-specialistwtm-worker-monthly-detail-table-form-date" type="number" id="wtt-day-from" value="1" min="1" max="31">
+                <input class="uu5-bricks-text uu5-common-text uu-specialistwtm-worker-monthly-detail-table-form-date" type="number" id="wtt-day-to" value="31" min="1" max="31">
+                <span id="wtt-time-in-range-sum" class="uu5-bricks-span uu-specialistwtm-worker-monthly-detail-top-total-time">${WtmWorktableView.printMinutes(0)}</span>
+                </div>`
+            );
+        this.getDayFromInput().onchange = () => this.updateSum();
+        this.getDayFromInput().onclick = () => this.updateSum();
+        this.getDayToInput().onchange = () => this.updateSum();
+        this.getDayToInput().onclick = () => this.updateSum();
+        this.updateSum().catch((e) => console.warn(e));
+    }
+
+
+    getDayToInput() {
+        return document.getElementById('wtt-day-to');
+    }
+
+    getDayFromInput() {
+        return document.getElementById('wtt-day-from');
+    }
+
+    async updateSum() {
+        const dFrom = Number(this.getDayFromInput().value);
+        const dTo = Number(this.getDayToInput().value);
+        document.getElementById('wtt-time-in-range-sum').innerText = '--h --m';
+        const minutesInRange = await WtmWorktableModel.minutesBetween(dFrom, dTo);
+        document.getElementById('wtt-time-in-range-sum').innerText = WtmWorktableView.printMinutes(minutesInRange);
+    }
+
+    static printMinutes(minutes) {
+        const hour = String(Math.floor(minutes / 60)).padStart(2, '0');
+        const minute = String(minutes % 60).padStart(2, '0');
+        return ` ${hour}h ${minute}m `;
+    }
+}
+
+class WtmDialog {
 
     static descArea() {
         return document.getElementsByTagName("textarea")[0];
@@ -156,8 +300,8 @@ class Wtm {
     }
 
     static getDurationSeconds() {
-        const dateFrom = Wtm.dateFrom();
-        const dateTo = Wtm.dateTo();
+        const dateFrom = WtmDialog.dateFrom();
+        const dateTo = WtmDialog.dateTo();
         if (isNaN(dateFrom.getTime()) || isNaN(dateTo.getTime())) {
             return 0;
         }
@@ -178,7 +322,7 @@ class Wtm {
 
     /** Returns the OK button. It is an &lt;a&gt; element containing a structure of spans. */
     static buttonNextItem() {
-        return Wtm.highRateNode().parentElement
+        return WtmDialog.highRateNode().parentElement
             .lastChild
             .firstChild
             .firstChild
@@ -187,7 +331,7 @@ class Wtm {
 
     /** Returns the 'Next item' button. It is an &lt;a&gt; element containing a structure of spans, or null in case of work log update. */
     static  buttonOk() {
-        return Wtm.highRateNode().parentElement
+        return WtmDialog.highRateNode().parentElement
             .lastChild
             .lastChild
             .firstChild
@@ -195,10 +339,10 @@ class Wtm {
     }
 
     static registerKeyboardShortcuts() {
-        Wtm.buttonOk().title = "Ctrl + Enter";
+        WtmDialog.buttonOk().title = "Ctrl + Enter";
         $(document).on("keydown", e => {
             if (e.keyCode === 13 && e.ctrlKey) {
-                Wtm.buttonOk().click();
+                WtmDialog.buttonOk().click();
             }
         });
     }
@@ -389,7 +533,7 @@ class IssueVisual {
             </div>
         </div>
         `);
-        IssueVisual.insertAfter(jiraBarNode, Wtm.highRateNode());
+        IssueVisual.insertAfter(jiraBarNode, WtmDialog.highRateNode());
         const logWorkEnableCheckbox = document.getElementById("jiraLogWorkEnabled");
         logWorkEnableCheckbox.onclick = () => {
             // noinspection JSUnresolvedFunction
@@ -439,7 +583,7 @@ class IssueVisual {
             const orig = this._issue.fields.timetracking.originalEstimateSeconds || 0;
             const remain = this._issue.fields.timetracking.remainingEstimateSeconds || 0;
             const logged = this._issue.fields.timetracking.timeSpentSeconds || 0;
-            const added = this.isJiraLogWorkEnabled() ? Wtm.getDurationSeconds() : 0;
+            const added = this.isJiraLogWorkEnabled() ? WtmDialog.getDurationSeconds() : 0;
             const total = Math.max(orig + remain, logged + added);
             const percentOfTotal = (x) => total > 0 ? x / total * 100 : 0;
             const setWidth = (id, w) => {
@@ -582,7 +726,7 @@ class P4uWorklogger {
 
     workLogFormShow() {
         this.issueVisual = new IssueVisual();
-        this._previousDesctiptionValue = Wtm.descArea().value;
+        this._previousDesctiptionValue = WtmDialog.descArea().value;
         this._previousIssue = Jira4U.tryParseIssue(this._previousDesctiptionValue);
         this.doTheMagic();
     }
@@ -591,12 +735,12 @@ class P4uWorklogger {
         this.issueVisual.showIssueDefault();
 
         const updateWorkTracker = () => this.issueVisual.trackWork();
-        Wtm.timeFrom().onblur = updateWorkTracker;
-        Wtm.timeTo().onblur = updateWorkTracker;
+        WtmDialog.timeFrom().onblur = updateWorkTracker;
+        WtmDialog.timeTo().onblur = updateWorkTracker;
 
         //In case of a Work log update, there may already be some work description.
-        if (Wtm.descArea().value) {
-            const wd = Jira4U.tryParseIssue(Wtm.descArea().value);
+        if (WtmDialog.descArea().value) {
+            const wd = Jira4U.tryParseIssue(WtmDialog.descArea().value);
             this.loadJiraIssue(wd);
         }
 
@@ -606,10 +750,10 @@ class P4uWorklogger {
 
     extendButtons() {
         //The callback function cannot be used directly because the context of 'this' in the callback would be the event target.
-        Wtm.buttonOk().onclick = () => this.writeWorkLogToJiraIfEnabled();
-        Wtm.buttonNextItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
-        Wtm.registerKeyboardShortcuts();
-        Wtm.registerAccessKeys();
+        WtmDialog.buttonOk().onclick = () => this.writeWorkLogToJiraIfEnabled();
+        WtmDialog.buttonNextItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
+        WtmDialog.registerKeyboardShortcuts();
+        WtmDialog.registerAccessKeys();
     }
 
     writeWorkLogToJiraIfEnabled() {
@@ -619,7 +763,7 @@ class P4uWorklogger {
     }
 
     static fillArtefactIfNeeded(rawJiraIssue) {
-        const artefactField = Wtm.artifactField();
+        const artefactField = WtmDialog.artifactField();
         if (!artefactField.value) {
             let jiraIssue = P4uWorklogger.mapToHumanJiraIssue(rawJiraIssue);
             let artefact = FlowBasedConfiguration.resolveArtefact(jiraIssue);
@@ -643,15 +787,15 @@ class P4uWorklogger {
     }
 
     writeWorkLogToJira() {
-        const wd = Jira4U.tryParseIssue(Wtm.descArea().value);
+        const wd = Jira4U.tryParseIssue(WtmDialog.descArea().value);
         if (!wd.issueKey) {
             return;
         }
-        const durationSeconds = Wtm.getDurationSeconds();
+        const durationSeconds = WtmDialog.getDurationSeconds();
         if (durationSeconds <= 0) {
             return 0;
         }
-        const dateFrom = Wtm.dateFrom();
+        const dateFrom = WtmDialog.dateFrom();
         console.log(`Logging ${durationSeconds} minutes of work on ${wd.issueKey}`);
         this.jira4U.logWork({
             key: wd.issueKey,
@@ -719,12 +863,12 @@ class P4uWorklogger {
             this.issueVisual.showIssueDefault();
         }
     }
-
 }
 
 const workLogger = new P4uWorklogger();
+const wtmWorktableView = new WtmWorktableView();
 
-class BrickObserver {
+class WtmDomObserver {
 
     constructor() {
         this.observeOptions = {
@@ -735,39 +879,39 @@ class BrickObserver {
             attributeOldValue: false,
             characterDataOldValue: false,
         };
-
         this.mutationObserver = null;
         this.pageReadyMutationOberver = null;
     }
 
     observe() {
-        const hasAddedNodes = mutation => mutation.addedNodes.length > 0;
+        const hasAddedNodes = (mutation) => mutation.addedNodes.length > 0;
+        const isWorkDescription = (mutation) => mutation.target.type === 'textarea' && mutation.target.name === 'description';
+        const isWorkLogForm = (mutation) => affectsNodesWithClass(mutation, 'uu5-bricks-modal-body', 'uu-specialistwtm-create-timesheet-item-modal-container');
+        const isWorkTable = (mutation) => affectsNodesWithClass(mutation, 'uu-specialistwtm-worker-monthly-detail-container', 'uu-specialistwtm-worker-monthly-detail-table');
+
+        const affectsNodesWithClass = (mutation, targetNodeClass, childNodeClass) => {
+            if (!mutation.target.classList.contains(targetNodeClass)) {
+                return false;
+            }
+            for (const childNode of mutation.target.childNodes) {
+                if (childNode.classList.contains(childNodeClass)) {
+                    return true;
+                }
+            }
+            return false;
+        };
 
         this.mutationObserver = new MutationObserver(function (mutations) {
             mutations
             // .filter(hasAddedNodes)
                 .forEach((mutation) => {
                     // console.log(mutation); //I expect to use this functionality frequently
-
-                    // description change
-                    if (mutation.target.type === "textarea" && mutation.target.name === "description") {
+                    if (isWorkDescription(mutation)) {
                         workLogger.checkWorkDescriptionChanged(mutation.target.textContent);
-                    }
-
-                    function isWorkLogForm(mutation) {
-                        if (mutation.target.className !== "uu5-bricks-modal-body") {
-                            return false;
-                        }
-                        for (const childNode of mutation.target.childNodes) {
-                            if (childNode.classList.contains("uu-specialistwtm-create-timesheet-item-modal-container")) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    }
-
-                    if (isWorkLogForm(mutation)) {
+                    } else if (isWorkLogForm(mutation)) {
                         workLogger.workLogFormShow();
+                    } else if (isWorkTable(mutation)) {
+                        wtmWorktableView.worktableSumViewShow();
                     }
                 });
         });
@@ -790,5 +934,5 @@ class BrickObserver {
     }
 }
 
-const brickObserver = new BrickObserver();
+const brickObserver = new WtmDomObserver();
 brickObserver.observe();
