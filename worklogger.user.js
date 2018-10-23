@@ -136,6 +136,31 @@ const _t = function (messageCode) {
     return bundle[messageCode];
 };
 
+class WtmDateTime {
+
+    /**
+     * Returns parsed date as an array of fields: [day, month, year]. Months are counted from 1.
+     * @param {string} selectedDate
+     * @return {number[]}
+     */
+    static parseDate(selectedDate) {
+        const dateMatch = selectedDate.match(/(\d\d)[\.|/](\d\d)[\.|/](\d{4})/);
+        const dateFields = dateMatch && dateMatch.slice(1).map(Number) || [NaN, NaN, NaN];
+        if (WtmWorktableModel.language() === 'cs') {
+            return dateFields;
+        } else {
+            const [month, day, year] = dateFields;
+            return [day, month, year];
+        }
+    }
+
+    static parseDateTime(selectedDate, selectedTime) {
+        const [day, month, year] = this.parseDate(selectedDate);
+        const [hour, minute] = selectedTime.split(':').map(Number);
+        return new Date(year, month - 1, day, hour, minute, 0, 0);
+    }
+}
+
 /**
  * Access methods to the WTM time table view.
  */
@@ -153,12 +178,22 @@ class WtmWorktableModel {
         return document.querySelector('table.uu5-bricks-table-table');
     }
 
+    /**
+     * Reads the day of month from a time table row.
+     * @param {HTMLTableRowElement} tableRow
+     * @return {number|NaN} Day of month, 0 - 31, or NaN.
+     */
     static getDay(tableRow) {
         const dateCellText = tableRow.cells[1].innerText;
-        const match = dateCellText.match(/\d\d[\.|\/](\d\d)[\.|\/]\d{4}/);
-        return match && match[1] || -1;
+        const dateFields = WtmDateTime.parseDate(dateCellText);
+        return dateFields[0];
     }
 
+    /**
+     * Reads logged working time in minutes from a time table row.
+     * @param {HTMLTableRowElement} tableRow
+     * @return {number|NaN} Minutes of work, or NaN.
+     */
     static getTimeInMinutes(tableRow) {
         const dateCellText = tableRow.cells[2].innerText;
         const match = dateCellText.match(/(\d\d)[:](\d\d)/);
@@ -226,7 +261,7 @@ class WtmWorktableView {
                 <span class="uu5-bricks-span uu5-bricks-lsi-item uu5-bricks-lsi uu-specialistwtm-worker-monthly-detail-top-total-time-label" style="width: max-content; min-width: 8em;">${_t('wtm.table.day-range.label')}</span>
                 <input class="uu5-bricks-text uu5-common-text uu-specialistwtm-worker-monthly-detail-table-form-date" type="number" id="wtt-day-from" value="${lastMonday}" min="1" max="31" style="width: 4em; margin: 0.25em">
                 <input class="uu5-bricks-text uu5-common-text uu-specialistwtm-worker-monthly-detail-table-form-date" type="number" id="wtt-day-to" value="${nextSunday}" min="1" max="31" style="width: 4em; margin: 0.25em">
-                <span id="wtt-time-in-range-sum" class="uu5-bricks-span uu-specialistwtm-worker-monthly-detail-top-total-time">${WtmWorktableView.printMinutes(0)}</span>
+                <span id="wtt-time-in-range-sum" class="uu5-bricks-span uu-specialistwtm-worker-monthly-detail-top-total-time">${WtmWorktableView.formatToHours(0)}</span>
                 </div>`
             );
         this.getDayFromInput().onchange = () => this.updateSum();
@@ -247,15 +282,13 @@ class WtmWorktableView {
     async updateSum() {
         const dFrom = Number(this.getDayFromInput().value);
         const dTo = Number(this.getDayToInput().value);
-        document.getElementById('wtt-time-in-range-sum').innerText = '--h --m';
+        document.getElementById('wtt-time-in-range-sum').innerText = '-h';
         const minutesInRange = await WtmWorktableModel.minutesBetween(dFrom, dTo);
-        document.getElementById('wtt-time-in-range-sum').innerText = WtmWorktableView.printMinutes(minutesInRange);
+        document.getElementById('wtt-time-in-range-sum').innerText = WtmWorktableView.formatToHours(minutesInRange);
     }
 
-    static printMinutes(minutes) {
-        const hour = String(Math.floor(minutes / 60)).padStart(2, '0');
-        const minute = String(minutes % 60).padStart(2, '0');
-        return ` ${hour}h ${minute}m `;
+    static formatToHours(minutes) {
+        return ` ${Number(Math.round(minutes / 60 * 100) / 100).toLocaleString(WtmWorktableModel.language())}h`;
     }
 }
 
@@ -295,11 +328,11 @@ class WtmDialog {
     }
 
     static dateFrom() {
-        return this.parseDateTime(this.datePicker().value, this.timeFrom().value);
+        return WtmDateTime.parseDateTime(this.datePicker().value, this.timeFrom().value);
     }
 
     static dateTo() {
-        return this.parseDateTime(this.datePicker().value, this.timeTo().value);
+        return WtmDateTime.parseDateTime(this.datePicker().value, this.timeTo().value);
     }
 
     static getDurationSeconds() {
@@ -310,17 +343,6 @@ class WtmDialog {
         }
         const durationMillis = dateTo - dateFrom;
         return durationMillis > 0 ? durationMillis / 1000 : 0;
-    }
-
-    static parseDate(selectedDate) {
-        const dateMatch = selectedDate.match(/(\d\d)[\.|/](\d\d)[\.|/](\d{4})/);
-        return dateMatch && dateMatch.slice(1).map(Number) || [NaN, NaN, NaN];
-    }
-
-    static parseDateTime(selectedDate, selectedTime) {
-        const [day, month, year] = this.parseDate(selectedDate);
-        const [hour, minute] = selectedTime.split(':').map(Number);
-        return new Date(year, month - 1, day, hour, minute, 0, 0);
     }
 
     /** Returns the OK button. It is an &lt;a&gt; element containing a structure of spans. */

@@ -25,6 +25,8 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **2.1.3**
+    - Fixed day/month misinterpretation in Czech localisation
 - **2.1.2**
     - Custom period for the sum of working hours is initialized to current week
     - Fixed input size in FF
