@@ -247,6 +247,7 @@ class WtmWorktableView {
     worktableSumViewShow() {
         if (document.getElementById('wtt-time-range-form')) {
             console.log('WTM Extension: Work table already enhanced.');
+            this.updateSum();
             return;
         }
         console.log('WTM Extension: enhancing work table');
@@ -445,7 +446,7 @@ class Jira4U {
     logWork(workInfo) {
         console.log(`Sending a work log request. Issue=${workInfo.key}, Time spent=${workInfo.duration}minutes, Comment="${workInfo.comment}"`);
         // noinspection JSUnresolvedFunction
-        GM_xmlhttpRequest(
+         GM_xmlhttpRequest(
             {
                 method: 'POST',
                 headers: {
@@ -782,6 +783,7 @@ class P4uWorklogger {
     }
 
     writeWorkLogToJiraIfEnabled() {
+        console.debug(new Date().toISOString(), 'Adding a work log item.');
         if (this.issueVisual.isJiraLogWorkEnabled()) {
             this.writeWorkLogToJira();
         }
@@ -828,15 +830,15 @@ class P4uWorklogger {
             duration: durationSeconds,
             comment: wd.descriptionText,
             onSuccess: (res) => {
-                console.log("Work was successfully logged to JIRA.", JSON.parse(res.responseText));
+                console.info("Work was successfully logged to JIRA.", JSON.parse(res.responseText));
                 //The buttons are probably refreshed. They loose listeners after adding a worklog.
                 setTimeout(() => this.extendButtons(), 500);
             },
             onError: (err) => {
-                console.log("Failed to log work to JIRA. ", err);
+                console.warn("Failed to log work to JIRA. ", err);
             },
             onReadyStateChange: function (res) {
-                console.log("Log work request state changed to: " + res.readyState);
+                console.debug("Log work request state changed to: " + res.readyState);
             }
         });
     }
@@ -845,7 +847,7 @@ class P4uWorklogger {
         if (this._previousDesctiptionValue !== description) {
             this._previousDesctiptionValue = description;
             this.workDescriptionChanged(description);
-        } else console.log("No description change")
+        } else console.debug("No description change")
     }
 
     /**
@@ -933,9 +935,14 @@ class WtmDomObserver {
                     // console.log(mutation); //I expect to use this functionality frequently
                     if (isWorkDescription(mutation)) {
                         workLogger.checkWorkDescriptionChanged(mutation.target.textContent);
-                    } else if (isWorkLogForm(mutation)) {
+                    }
+                    if (isWorkLogForm(mutation)) {
                         workLogger.workLogFormShow();
-                    } else if (isWorkTable(mutation)) {
+                    } else if (mutation.target.classList.contains('uu-specialistwtm-create-timesheet-item-buttons-save')) {
+                        console.debug('Buttons changed, re-applying extension.');
+                        workLogger.extendButtons();
+                    }
+                    if (isWorkTable(mutation)) {
                         wtmWorktableView.worktableSumViewShow();
                     }
                 });
