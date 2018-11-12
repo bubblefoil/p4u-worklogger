@@ -25,6 +25,8 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **2.2.1**
+    - Prev/next month buttons
 - **2.1.4**
     - Fixed work not logged to Jira
 - **2.1.3**

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.1.4
+// @version      2.2.1
 // @namespace    https://uuos9.plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -110,9 +110,13 @@ if (!pageCheck.isWorkLogFormPage()) {
 const wtmMessage = {
     cs: {
         'wtm.table.day-range.label': 'ČAS MEZI DNY:',
+        'wtm.month.prev.title': 'Předchozí měsíc',
+        'wtm.month.next.title': 'Následující měsíc',
     },
     en: {
-        'wtm.table.day-range.label': 'TIME BETWEEN DAYS:'
+        'wtm.table.day-range.label': 'TIME BETWEEN DAYS:',
+        'wtm.month.prev.title': 'Previous month',
+        'wtm.month.next.title': 'Next month',
     }
 };
 
@@ -892,8 +896,95 @@ class P4uWorklogger {
     }
 }
 
+/**
+ * Adds month selection buttons.
+ */
+class MonthSelector {
+
+    static getMonthSelectorContainer() {
+        return document.querySelector('.uu-specialistwtm-worker-monthly-detail-top-change-month-dropdown');
+    }
+
+    static getMonthSelector() {
+        return this.getMonthSelectorContainer().firstElementChild;
+    }
+
+    static getMonthSelectorButton() {
+        return this.getMonthSelector().querySelector('button');
+    }
+
+    static getSelectedMonthValue() {
+        return this.getMonthSelectorButton().querySelector('.uu-specialistwtm-worker-monthly-detail-top-month-dropdown-value').innerText;
+    }
+
+    install() {
+        if (MonthSelector.getMonthSelectorContainer().querySelector('span.uu-specialistwtm-worker-monthly-detail-top-back-icon')) {
+            return;
+        }
+        const createArrow = (direction) => {
+            const arrow = document.createElement('span');
+            arrow.classList.add('uu5-bricks-icon', 'uu-specialistwtm-worker-monthly-detail-top-back-icon', 'mdi', 'mdi-chevron-' + direction);
+            return arrow;
+        };
+
+        /**
+         * Creates the month switching callback, which is called after the dropdown menu is shown.
+         * The menu is a div containing an UL element. This list is searched for the current month by the displayed text.
+         * Index of the selected list item is updated and the neighbor item is clicked.
+         *
+         * @param selectedMonthText
+         * @return {function(*): Function}
+         */
+        const selectMonth = (selectedMonthText) => (monthIndexFn) => () => {
+            const dropDown = MonthSelector.getMonthDropDown();
+            if (!dropDown) {
+                console.warn('Month drop-down menu does not exist.');
+                return;
+            }
+            const selectedMonthIndex = Array
+                .from(dropDown.children)
+                .findIndex(li => li.innerText === selectedMonthText);
+            if (selectedMonthIndex < 0) {
+                console.debug('Cannot find selected month:', selectedMonthText);
+                return;//May leave the menu opened? It may actually be desirable as a fallback scenario.
+            }
+            const newMonthIndex =
+                Math.max(0,
+                    Math.min(dropDown.children.length - 1,
+                        monthIndexFn(selectedMonthIndex)))
+                || selectedMonthIndex;
+            dropDown.children[newMonthIndex].firstChild.click();//LI contains an A element
+        };
+
+        const arrowClickHandler = (monthIdxUpdateFn) => (event) => {
+            console.trace('WTM Extension', 'Click:', event);
+            //Show the months dropdown
+            MonthSelector.getMonthSelectorButton().click();
+            //Allow browser to render the menu, then click desired month
+            setTimeout(selectMonth(MonthSelector.getSelectedMonthValue())(monthIdxUpdateFn), 0);
+        };
+
+        const arrowLeft = createArrow('left');
+        arrowLeft.onclick = arrowClickHandler(i => i + 1);//Months are in the reversed order
+        arrowLeft.title = _t('wtm.month.prev.title');
+
+        const arrowRight = createArrow('right');
+        arrowRight.onclick = arrowClickHandler(i => i - 1);
+        arrowRight.title = _t('wtm.month.next.title');
+
+        const monthSelector = MonthSelector.getMonthSelector();
+        monthSelector.insertBefore(arrowLeft, monthSelector.firstChild);
+        monthSelector.appendChild(arrowRight);
+    }
+
+    static getMonthDropDown() {
+        return MonthSelector.getMonthSelectorContainer().querySelector('ul.uu5-bricks-dropdown-menu-list');
+    }
+}
+
 const workLogger = new P4uWorklogger();
 const wtmWorktableView = new WtmWorktableView();
+const monthSelector = new MonthSelector();
 
 class WtmDomObserver {
 
@@ -944,6 +1035,10 @@ class WtmDomObserver {
                     }
                     if (isWorkTable(mutation)) {
                         wtmWorktableView.worktableSumViewShow();
+                    }
+
+                    if (MonthSelector.getMonthSelectorContainer()) {
+                        monthSelector.install();
                     }
                 });
         });
