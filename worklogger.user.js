@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.2.1
+// @version      2.2.2
 // @namespace    https://uuos9.plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -148,8 +148,8 @@ class WtmDateTime {
      * @return {number[]}
      */
     static parseDate(selectedDate) {
-        const dateMatch = selectedDate.match(/(\d\d)[\.|/](\d\d)[\.|/](\d{4})/);
-        const dateFields = dateMatch && dateMatch.slice(1).map(Number) || [NaN, NaN, NaN];
+        const dateParts = selectedDate.split(/[.\/]/);
+        const dateFields = dateParts.length === 3 && dateParts.map(Number) || [NaN, NaN, NaN];
         if (WtmWorktableModel.language() === 'cs') {
             return dateFields;
         } else {
@@ -943,7 +943,7 @@ class MonthSelector {
             }
             const selectedMonthIndex = Array
                 .from(dropDown.children)
-                .findIndex(li => li.innerText === selectedMonthText);
+                .findIndex(li => li.innerText.trim() === selectedMonthText);
             if (selectedMonthIndex < 0) {
                 console.debug('Cannot find selected month:', selectedMonthText);
                 return;//May leave the menu opened? It may actually be desirable as a fallback scenario.

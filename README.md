@@ -25,6 +25,8 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **2.2.2**
+    - Fixed Jira work logging and Prev/next month buttons not working in Czech localisation.
 - **2.2.1**
     - Prev/next month buttons
 - **2.1.4**
