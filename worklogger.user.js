@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.2.2
+// @version      2.3.0
 // @namespace    https://uuos9.plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -308,7 +308,6 @@ class WtmDialog {
             .lastChild
             .firstChild
             .firstChild
-
     }
 
     static timeFrom() {
@@ -418,24 +417,25 @@ class Jira4U {
 
     /**
      * @param {string} key JIRA issue key string
-     * @param {Function} onload
-     * @param {Function} onerror
      * @param {?Function} onprogress Optional loading progress callback
+     * @return {Promise}
      */
-    loadIssue(key, onload, onerror, onprogress) {
-        // noinspection JSUnresolvedFunction
-        GM_xmlhttpRequest(
-            {
-                method: 'GET',
-                headers: {"Accept": "application/json"},
-                url: jiraRestApiUrlIssue.concat("/", key),
-                onreadystatechange: onprogress || function (res) {
-                    console.log("Request state: " + res.readyState);
-                },
-                onload: onload,
-                onerror: onerror
-            }
-        );
+    static loadIssue(key, onprogress) {
+        return new Promise((resolve, reject) => {
+            // noinspection JSUnresolvedFunction
+            GM_xmlhttpRequest(
+                {
+                    method: 'GET',
+                    headers: {"Accept": "application/json"},
+                    url: jiraRestApiUrlIssue.concat("/", key),
+                    onreadystatechange: onprogress || function (res) {
+                        console.log("Request state: " + res.readyState);
+                    },
+                    onload: resolve,
+                    onerror: reject
+                }
+            );
+        });
     }
 
     /**
@@ -443,34 +443,35 @@ class Jira4U {
      * @param {Date} workInfo.started The date/time the work on the issue started.
      * @param {number} workInfo.duration in seconds.
      * @param {string} workInfo.comment The work log comment.
-     * @param {Function} [workInfo.onSuccess] Callback to be invoked on response from JIRA.
-     * @param {Function} [workInfo.onError] Callback to be invoked in case the JIRA request fails.
      * @param {Function} [workInfo.onReadyStateChange] Callback to be invoked when the request state changes.
+     * @return {Promise}
      */
-    logWork(workInfo) {
+    static logWork(workInfo) {
         console.log(`Sending a work log request. Issue=${workInfo.key}, Time spent=${workInfo.duration}minutes, Comment="${workInfo.comment}"`);
-        // noinspection JSUnresolvedFunction
-         GM_xmlhttpRequest(
-            {
-                method: 'POST',
-                headers: {
-                    "Content-Type": "application/json",
-                    //Disable the cross-site request check on the JIRA side
-                    "X-Atlassian-Token": "nocheck",
-                    //Previous header does not work for requests from a web browser
-                    "User-Agent": "xx"
-                },
-                data: `{
+        return new Promise((resolve, reject) => {
+            // noinspection JSUnresolvedFunction
+            GM_xmlhttpRequest(
+                {
+                    method: 'POST',
+                    headers: {
+                        "Content-Type": "application/json",
+                        //Disable the cross-site request check on the JIRA side
+                        "X-Atlassian-Token": "nocheck",
+                        //Previous header does not work for requests from a web browser
+                        "User-Agent": "xx"
+                    },
+                    data: `{
                         "timeSpentSeconds": ${workInfo.duration},
                         "started": "${this.toIsoString(workInfo.started)}",
                         "comment": "${workInfo.comment}"
                     }`,
-                url: jiraRestApiUrlIssue.concat("/", workInfo.key, "/worklog"),
-                onreadystatechange: workInfo.onReadyStateChange,
-                onload: workInfo.onSuccess,
-                onerror: workInfo.onError
-            }
-        );
+                    url: jiraRestApiUrlIssue.concat("/", workInfo.key, "/worklog"),
+                    onreadystatechange: workInfo.onReadyStateChange,
+                    onload: resolve,
+                    onerror: reject
+                }
+            )
+        });
     }
 
     /**
@@ -479,7 +480,7 @@ class Jira4U {
      * @param {Date} date Valid Date object to be formatted.
      * @returns {string}
      */
-    toIsoString(date) {
+    static toIsoString(date) {
         let offset = -date.getTimezoneOffset(),
             offsetSign = offset >= 0 ? '+' : '-',
             pad = function (num) {
@@ -502,37 +503,34 @@ class Jira4U {
  * JIRA issue visualisation functions.
  */
 class IssueVisual {
+
     constructor() {
-        this._jiraLogWorkEnabledValue = "p4u.jira.worklog.enabled";
-        const $parsedJiraIssue = $("#parsedJiraIssue");
-        if ($parsedJiraIssue.length === 0) {
-            this.addToForm();
+        this.init();
+    }
+
+    init() {
+        if (document.getElementById('jira-toolbar-envelope')) {
+            console.log("JIRA toolbar was already added to form.");
+            return;
         }
-        this._jiraLogWorkEnabled = document.getElementById("jiraLogWorkEnabled");
+        IssueVisual.addToForm();
         this._issue = null;
     }
 
     /**
      * Adds jira issue container to the form.
      */
-    addToForm() {
-        // noinspection JSUnresolvedFunction
-        const logWorkEnabled = GM_getValue(this._jiraLogWorkEnabledValue, true);
-        const checked = logWorkEnabled ? `checked="checked"` : '';
-        console.log("Adding JIRA Visual into form");
-        // noinspection CssUnknownTarget
+    static addToForm() {
+        console.log("Adding JIRA toolbar into form");
 
         const transition = "-webkit-transition: width 0.25s; transition-delay: 0.5s;";
         const trackerStyle = "width: 100%; border-collapse: collapse; height: 0.75em; margin-top: 0.4em;";
 
         //.uu5-forms-label uu5-forms-input-m
-        const jiraBarNode = document.createElement('div');
+        const jiraBarNode = document.createElement('DIV');
+        jiraBarNode.id = 'jira-toolbar-envelope';
         jiraBarNode.innerHTML = (`
         <div>
-            <div>
-                <input type="checkbox" id="jiraLogWorkEnabled" ${checked} accesskey="j" style=" margin-bottom: 3px; vertical-align: bottom; ">
-                <label for="jiraLogWorkEnabled" class="uu5-forms-input-m">Vykázat na <u>J</u>IRA issue</label>
-            </div>
             <div>
                 <span id="parsedJiraIssue" class="uu5-forms-input-m"></span>
             </div>
@@ -562,22 +560,19 @@ class IssueVisual {
                 <span id="parsedJiraIssue"></span>
             </div>
         </div>
+        <div style="margin-top: 10px">
+            <button id="jiraLogWorkButton" class="uu5-bricks-button-m uu6-bricks-button-filled" type="button" style="border: none" disabled>
+                <span class="uu5-bricks-span uu5-bricks-lsi-item uu5-bricks-lsi">Vykázat na <u>J</u>IRA issue</span>
+            </button>
+            <span id="jira-issue-work-log-request-progress" style="margin-left: 8px;"></span>
+        </div>
         `);
         IssueVisual.insertAfter(jiraBarNode, WtmDialog.highRateNode());
-        const logWorkEnableCheckbox = document.getElementById("jiraLogWorkEnabled");
-        logWorkEnableCheckbox.onclick = () => {
-            // noinspection JSUnresolvedFunction
-            GM_setValue(this._jiraLogWorkEnabledValue, logWorkEnableCheckbox.checked);
-            this.trackWork();//To reset the added work log on the tracker
-        };
     }
+
 
     static insertAfter(newNode, referenceNode) {
         referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
-    }
-
-    isJiraLogWorkEnabled() {
-        return this._jiraLogWorkEnabled.checked;
     }
 
     /**
@@ -613,7 +608,7 @@ class IssueVisual {
             const orig = this._issue.fields.timetracking.originalEstimateSeconds || 0;
             const remain = this._issue.fields.timetracking.remainingEstimateSeconds || 0;
             const logged = this._issue.fields.timetracking.timeSpentSeconds || 0;
-            const added = this.isJiraLogWorkEnabled() ? WtmDialog.getDurationSeconds() : 0;
+            const added = WtmDialog.getDurationSeconds();
             const total = Math.max(orig + remain, logged + added);
             const percentOfTotal = (x) => total > 0 ? x / total * 100 : 0;
             const setWidth = (id, w) => {
@@ -656,8 +651,9 @@ class IssueVisual {
         this.resetIssue();
         let responseErr = responseDetail.response;
         let key = responseDetail.key;
+        const jiraIssueLink = label => `<a href="${jiraBrowseIssue}/${key}" target="_blank">${label}</a>`;
         if (responseErr.status === 401) {
-            IssueVisual.$jiraIssueSummary().empty().append(`JIRA autentifikace selhala. <a href="${jiraBrowseIssue}/${key}" target="_blank">Přihlaste se do JIRA.</a>`);
+            IssueVisual.$jiraIssueSummary().empty().append(`JIRA autentizace selhala. ${jiraIssueLink('Přihlaste se do JIRA.')}`);
             return;
         }
         if (responseErr.status === 404
@@ -669,11 +665,30 @@ class IssueVisual {
                 return;
             }
         }
-        IssueVisual.$jiraIssueSummary().empty().append(`<span>Něco se přihodilo. Budete muset vykázat do JIRA ručně.</span>`);
+        IssueVisual.$jiraIssueSummary().empty().append(`<span>Něco se přihodilo. Budete muset ${jiraIssueLink('vykázat do JIRA ručně.')}'</span>`);
     }
 
     static $jiraIssueSummary() {
         return $(document.getElementById("parsedJiraIssue"));
+    }
+
+    static showJiraIssueWorkLogRequestProgress(state, ...params) {
+        const stateViews = {
+            'loading': jiraIssueLoaderAnimation,
+            'done': `✔`,
+            'error': `❌`,
+            'idle': ``
+        };
+        const logProgress = document.getElementById("jira-issue-work-log-request-progress");
+        logProgress.innerHTML = stateViews[state] || stateViews['idle'];
+        return logProgress;
+    }
+
+    /**
+     * @return {HTMLElement} Log work button
+     */
+    static jiraLogWorkButton() {
+        return document.getElementById('jiraLogWorkButton');
     }
 
 }
@@ -749,13 +764,13 @@ class P4uWorklogger {
     constructor() {
         // Initialize the page decoration.
         this.issueVisual = null;
-        this.jira4U = new Jira4U();
         this._previousDesctiptionValue = null;
         this._previousIssue = null;
     }
 
     workLogFormShow() {
-        this.issueVisual = new IssueVisual();
+        this.issueVisual = this.issueVisual || new IssueVisual();
+        this.issueVisual.init();
         this._previousDesctiptionValue = WtmDialog.descArea().value;
         this._previousIssue = Jira4U.tryParseIssue(this._previousDesctiptionValue);
         this.doTheMagic();
@@ -774,23 +789,15 @@ class P4uWorklogger {
             this.loadJiraIssue(wd);
         }
 
-        //Intercept form's confirmation buttons.
-        this.extendButtons();
+        const jiraLogWorkButton = IssueVisual.jiraLogWorkButton();
+        jiraLogWorkButton.removeEventListener('click', P4uWorklogger.writeWorkLogToJira);
+        jiraLogWorkButton.addEventListener('click', P4uWorklogger.writeWorkLogToJira);
+        P4uWorklogger.registerKeyboardShortcuts();
     }
 
-    extendButtons() {
-        //The callback function cannot be used directly because the context of 'this' in the callback would be the event target.
-        WtmDialog.buttonOk().onclick = () => this.writeWorkLogToJiraIfEnabled();
-        WtmDialog.buttonNextItem().onclick = () => this.writeWorkLogToJiraIfEnabled();
+    static registerKeyboardShortcuts() {
         WtmDialog.registerKeyboardShortcuts();
         WtmDialog.registerAccessKeys();
-    }
-
-    writeWorkLogToJiraIfEnabled() {
-        console.debug(new Date().toISOString(), 'Adding a work log item.');
-        if (this.issueVisual.isJiraLogWorkEnabled()) {
-            this.writeWorkLogToJira();
-        }
     }
 
     static fillArtefactIfNeeded(rawJiraIssue) {
@@ -817,33 +824,42 @@ class P4uWorklogger {
         return humanReadableIssue;
     }
 
-    writeWorkLogToJira() {
+    static writeWorkLogToJira() {
+        console.debug(new Date().toISOString(), 'Adding a work log item.');
         const wd = Jira4U.tryParseIssue(WtmDialog.descArea().value);
         if (!wd.issueKey) {
             return;
         }
+        IssueVisual.jiraLogWorkButton().disabled = true;
         const durationSeconds = WtmDialog.getDurationSeconds();
         if (durationSeconds <= 0) {
             return 0;
         }
         const dateFrom = WtmDialog.dateFrom();
         console.log(`Logging ${durationSeconds} minutes of work on ${wd.issueKey}`);
-        this.jira4U.logWork({
+        Jira4U.logWork({
             key: wd.issueKey,
             started: dateFrom,
             duration: durationSeconds,
             comment: wd.descriptionText,
-            onSuccess: (res) => {
-                console.info("Work was successfully logged to JIRA.", JSON.parse(res.responseText));
-                //The buttons are probably refreshed. They loose listeners after adding a worklog.
-                setTimeout(() => this.extendButtons(), 500);
-            },
-            onError: (err) => {
-                console.warn("Failed to log work to JIRA. ", err);
-            },
-            onReadyStateChange: function (res) {
-                console.debug("Log work request state changed to: " + res.readyState);
+            onReadyStateChange: function (state) {
+                console.debug("Log work request state changed to: " + state.readyState);
+                if (state === 1) {
+                    IssueVisual.showJiraIssueWorkLogRequestProgress('loading');
+                }
             }
+        }).then(res => {
+            console.info("Work was successfully logged to JIRA.", JSON.parse(res.responseText));
+            IssueVisual.showJiraIssueWorkLogRequestProgress('done');
+            //The buttons are probably refreshed. They loose their enhancements after adding a worklog.
+            setTimeout(() => {
+                P4uWorklogger.registerKeyboardShortcuts();
+                IssueVisual.jiraLogWorkButton().disabled = false;
+            }, 500);
+        }, err => {
+            console.warn("Failed to log work to JIRA. ", err);
+            IssueVisual.showJiraIssueWorkLogRequestProgress('error');
+            IssueVisual.jiraLogWorkButton().disabled = false;
         });
     }
 
@@ -866,33 +882,36 @@ class P4uWorklogger {
     }
 
     loadJiraIssue(wd) {
-        if (wd.issueKey) {
-            let key = wd.issueKey;
-            console.log("JIRA issue key recognized: ", key);
-            this.jira4U.loadIssue(wd.issueKey, response => {
-                console.log(`Loading of issue ${key} completed.`);
-                //Getting into the onload function does not actually mean the status was OK
-                if (response.status === 200) {
-                    console.log(`Issue ${key} loaded successfully.`);
-                    let rawJiraIssue = JSON.parse(response.responseText);
-                    this.issueVisual.showIssue(rawJiraIssue);
-                    P4uWorklogger.fillArtefactIfNeeded(rawJiraIssue);
-                } else {
-                    console.log(`Failed to load issue ${key}. Status: ${response.status}`);
-                    this.issueVisual.issueLoadingFailed({key, response});
-                }
-            }, responseErr => {
-                console.log(`Failed to load issue ${key}. Status: ${responseErr.status}`);
-                this.issueVisual.issueLoadingFailed({key, response: responseErr});
-            }, progress => {
-                if (progress.readyState === 1) {
-                    this.issueVisual.showIssueLoadingProgress();
-                }
-                console.log(`Loading jira issue ${key}, state: ${progress.readyState}`);
-            });
-        } else {
+        IssueVisual.jiraLogWorkButton().disabled = true;
+        IssueVisual.showJiraIssueWorkLogRequestProgress('idle');
+        if (!wd.issueKey) {
             this.issueVisual.showIssueDefault();
+            return;
         }
+        let key = wd.issueKey;
+        console.log("JIRA issue key recognized: ", key);
+        Jira4U.loadIssue(wd.issueKey, progress => {
+            if (progress.readyState === 1) {
+                this.issueVisual.showIssueLoadingProgress();
+            }
+            console.log(`Loading jira issue ${key}, state: ${progress.readyState}`);
+        }).then(response => {
+            console.log(`Loading of issue ${key} completed.`);
+            //Getting into the onload function does not actually mean the status was OK
+            if (response.status === 200) {
+                console.log(`Issue ${key} loaded successfully.`);
+                let rawJiraIssue = JSON.parse(response.responseText);
+                this.issueVisual.showIssue(rawJiraIssue);
+                IssueVisual.jiraLogWorkButton().disabled = false;
+                P4uWorklogger.fillArtefactIfNeeded(rawJiraIssue);
+            } else {
+                console.log(`Failed to load issue ${key}. Status: ${response.status}`);
+                this.issueVisual.issueLoadingFailed({key, response});
+            }
+        }, responseErr => {
+            console.log(`Failed to load issue ${key}. Status: ${responseErr.status}`);
+            this.issueVisual.issueLoadingFailed({key, response: responseErr});
+        });
     }
 }
 
@@ -1031,7 +1050,7 @@ class WtmDomObserver {
                         workLogger.workLogFormShow();
                     } else if (mutation.target.classList.contains('uu-specialistwtm-create-timesheet-item-buttons-save')) {
                         console.debug('Buttons changed, re-applying extension.');
-                        workLogger.extendButtons();
+                        P4uWorklogger.registerKeyboardShortcuts();
                     }
                     if (isWorkTable(mutation)) {
                         wtmWorktableView.worktableSumViewShow();

@@ -25,6 +25,9 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **2.3.0**
+    - Fixed duplicate logging of work into Jira
+    - Add separate button to log work into Jira
 - **2.2.2**
     - Fixed Jira work logging and Prev/next month buttons not working in Czech localisation.
 - **2.2.1**
