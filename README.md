@@ -25,6 +25,8 @@ Eventually this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **2.3.1**
+    - Fixed styling of month table enhancements
 - **2.3.0**
     - Fixed duplicate logging of work into Jira
     - Add separate button to log work into Jira

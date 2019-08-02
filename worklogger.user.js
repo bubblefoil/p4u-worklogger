@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.3.0
+// @version      2.3.1
 // @namespace    https://uuos9.plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -9,6 +9,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_addStyle
 // @connect      jira.unicorn.eu
 // @match        https://uuos9.plus4u.net/uu-specialistwtmg01-main/*
 // @run-at       document-idle
@@ -31,6 +32,26 @@ class PageCheck {
         }
         return true;
     }
+}
+
+let pageCheck = new PageCheck();
+if (!pageCheck.isWorkLogFormPage()) {
+    // noinspection JSAnnotator
+    return;
+} else {
+    // language=CSS
+    // noinspection JSUnresolvedFunction
+    GM_addStyle(`
+    /* Widen the month selection button envelope by overriding its fixed width. */
+    .uu-specialistwtm-worker-monthly-detail-top-change-month-dropdown {
+        min-width: 330px;
+    }
+    /* Copied from .uu-specialistwtm-worker-monthly-detail-top-back-icon without its padding */
+    .wtm-month-switch-button-icon {
+        color: #616161;
+        font-size: 20px;
+    }
+    `);
 }
 
 const jiraIssueLoaderAnimation = `
@@ -102,11 +123,6 @@ class LogTableDecorator {
     }
 }
 
-let pageCheck = new PageCheck();
-if (!pageCheck.isWorkLogFormPage()) {
-    // noinspection JSAnnotator
-    return;
-}
 const wtmMessage = {
     cs: {
         'wtm.table.day-range.label': 'ČAS MEZI DNY:',
@@ -134,7 +150,7 @@ const _t = function (messageCode) {
     };
     const bundle = getBundle();
     if (!bundle.hasOwnProperty(messageCode)) {
-        console.warn(`I18N message "${messageCode}" is not defined for "${WtmWorktableModel.language()}`);
+        console.warn(`)I18N message "${messageCode}" is not defined for "${WtmWorktableModel.language()}`);
         return messageCode;
     }
     return bundle[messageCode];
@@ -251,7 +267,7 @@ class WtmWorktableView {
     worktableSumViewShow() {
         if (document.getElementById('wtt-time-range-form')) {
             console.log('WTM Extension: Work table already enhanced.');
-            this.updateSum();
+            WtmWorktableView.updateSum();
             return;
         }
         console.log('WTM Extension: enhancing work table');
@@ -262,31 +278,33 @@ class WtmWorktableView {
         WtmWorktableModel.monthlyDetailTopTimeColumn()
             .insertAdjacentHTML(
                 'beforeend',
-                `<div id="wtt-time-range-form" class="uu5-common-div uu-specialistwtm-worker-monthly-detail-top-time-column">
-                <span class="uu5-bricks-span uu5-bricks-lsi-item uu5-bricks-lsi uu-specialistwtm-worker-monthly-detail-top-total-time-label" style="width: max-content; min-width: 8em;">${_t('wtm.table.day-range.label')}</span>
-                <input class="uu5-bricks-text uu5-common-text uu-specialistwtm-worker-monthly-detail-table-form-date" type="number" id="wtt-day-from" value="${lastMonday}" min="1" max="31" style="width: 4em; margin: 0.25em">
-                <input class="uu5-bricks-text uu5-common-text uu-specialistwtm-worker-monthly-detail-table-form-date" type="number" id="wtt-day-to" value="${nextSunday}" min="1" max="31" style="width: 4em; margin: 0.25em">
-                <span id="wtt-time-in-range-sum" class="uu5-bricks-span uu-specialistwtm-worker-monthly-detail-top-total-time">${WtmWorktableView.formatToHours(0)}</span>
+                `
+                <div id="wtt-time-range-form" class="uu-specialistwtm-worker-monthly-detail-top-time-column" style="z-index: 10">
+                    <!--Move the span to front, because this div is covered by some uu component's width % and the content is hard to select by mouse-->
+                    <span class="uu5-bricks-span uu5-bricks-lsi-item uu5-bricks-lsi uu-specialistwtm-worker-monthly-detail-top-total-time-label" style="width: max-content; min-width: 8em;">${_t('wtm.table.day-range.label')}</span>
+                    <input class="uu5-bricks-text uu5-common-text uu-specialistwtm-worker-monthly-detail-table-form-date" type="number" id="wtt-day-from" value="${lastMonday}" min="1" max="31" style="width: 4em; margin: 0.25em">
+                    <input class="uu5-bricks-text uu5-common-text uu-specialistwtm-worker-monthly-detail-table-form-date" type="number" id="wtt-day-to" value="${nextSunday}" min="1" max="31" style="width: 4em; margin: 0.25em">
+                    <span id="wtt-time-in-range-sum" class="uu5-bricks-span uu-specialistwtm-worker-monthly-detail-top-total-time">${WtmWorktableView.formatToHours(0)}</span>
                 </div>`
             );
-        this.getDayFromInput().onchange = () => this.updateSum();
-        this.getDayFromInput().onclick = () => this.updateSum();
-        this.getDayToInput().onchange = () => this.updateSum();
-        this.getDayToInput().onclick = () => this.updateSum();
-        this.updateSum().catch((e) => console.warn(e));
+        WtmWorktableView.getDayFromInput().onchange = () => WtmWorktableView.updateSum();
+        WtmWorktableView.getDayFromInput().onclick = () => WtmWorktableView.updateSum();
+        WtmWorktableView.getDayToInput().onchange = () => WtmWorktableView.updateSum();
+        WtmWorktableView.getDayToInput().onclick = () => WtmWorktableView.updateSum();
+        WtmWorktableView.updateSum().catch((e) => console.warn(e));
     }
 
-    getDayToInput() {
+    static getDayToInput() {
         return document.getElementById('wtt-day-to');
     }
 
-    getDayFromInput() {
+    static getDayFromInput() {
         return document.getElementById('wtt-day-from');
     }
 
-    async updateSum() {
-        const dFrom = Number(this.getDayFromInput().value);
-        const dTo = Number(this.getDayToInput().value);
+    static async updateSum() {
+        const dFrom = Number(WtmWorktableView.getDayFromInput().value);
+        const dTo = Number(WtmWorktableView.getDayToInput().value);
         document.getElementById('wtt-time-in-range-sum').innerText = '-h';
         const minutesInRange = await WtmWorktableModel.minutesBetween(dFrom, dTo);
         document.getElementById('wtt-time-in-range-sum').innerText = WtmWorktableView.formatToHours(minutesInRange);
@@ -937,12 +955,12 @@ class MonthSelector {
     }
 
     install() {
-        if (MonthSelector.getMonthSelectorContainer().querySelector('span.uu-specialistwtm-worker-monthly-detail-top-back-icon')) {
+        if (MonthSelector.getMonthSelectorContainer().querySelector('span.wtm-month-switch-button-icon')) {
             return;
         }
         const createArrow = (direction) => {
-            const arrow = document.createElement('span');
-            arrow.classList.add('uu5-bricks-icon', 'uu-specialistwtm-worker-monthly-detail-top-back-icon', 'mdi', 'mdi-chevron-' + direction);
+            const arrow = document.createElement('SPAN');
+            arrow.classList.add('wtm-month-switch-button-icon', 'uu5-bricks-button', 'uu5-bricks-button-inverted', 'mdi', 'mdi-chevron-' + direction);
             return arrow;
         };
 
