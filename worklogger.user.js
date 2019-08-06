@@ -1,8 +1,9 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.3.1
+// @version      2.4.0
 // @namespace    https://uuos9.plus4u.net/
+// @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
 // @license      MIT
 // @require      https://code.jquery.com/jquery-3.2.1.min.js
@@ -11,20 +12,23 @@
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @connect      jira.unicorn.eu
+// @connect      jira.unicorn.com
 // @match        https://uuos9.plus4u.net/uu-specialistwtmg01-main/*
 // @run-at       document-idle
 // ==/UserScript==
 
 //Test issue - FBLI-7870
-const jiraUrl = 'https://jira.unicorn.eu';
-const jiraBrowseIssue = jiraUrl + "/browse";
-const jiraRestApiUrl = jiraUrl + '/rest/api/2';
+const jiraEuUrl = 'https://jira.unicorn.eu';
+const jiraComUrl = 'https://jira.unicorn.com';
+const jiraBrowseIssue = jiraEuUrl + "/browse";
+const jiraRestApiUrl = jiraEuUrl + '/rest/api/2';
 const jiraRestApiUrlIssue = jiraRestApiUrl + '/issue';
 const jiraIssueKeyPattern = /([A-Z]+-\d+)/;
+const jiraIssueProjectPattern = /([A-Z]+)-\d+/;
 
 class PageCheck {
 
-    isWorkLogFormPage() {
+    static isWorkLogFormPage() {
         //Check that the work log page is loaded by querying for some expected elements
         if (document.title !== 'Working Time Management') {
             console.log("Judging by the page title, this does not seem to be the Working Time Management app. Exiting extension script.");
@@ -34,8 +38,7 @@ class PageCheck {
     }
 }
 
-let pageCheck = new PageCheck();
-if (!pageCheck.isWorkLogFormPage()) {
+if (!PageCheck.isWorkLogFormPage()) {
     // noinspection JSAnnotator
     return;
 } else {
@@ -52,6 +55,9 @@ if (!pageCheck.isWorkLogFormPage()) {
         font-size: 20px;
     }
     `);
+
+    // Polyfill some syntactic sugar
+    Promise.of = Promise.resolve;
 }
 
 const jiraIssueLoaderAnimation = `
@@ -98,6 +104,33 @@ const jiraIssueLoaderAnimation = `
     </g>
 </svg>
 `;
+
+/**
+ * Branches off the flow into a supplied function,
+ * typically to perform side-effects.
+ * Returns the input value.
+ *
+ * @param {function(*): *} f The dead-end functions, may be impure.
+ * @return {function(*): (Promise<*> | Promise<void>)} Resolved Promise of the original input
+ */
+const tee = (f) => (x) => {
+    f(x);
+    return Promise.of(x);
+};
+
+/**
+ * Pure form of attribute assignment.
+ * Adds an attribute to an object and returns the updated object.
+ *
+ * @param o Target object
+ * @param k Attribute name
+ * @param v Attribute value
+ * @return {Object} o with o.k = v
+ */
+const assoc = (o, k, v) => {
+    o[k] = v;
+    return o;
+};
 
 /**
  * Enhances the work log table.
@@ -264,7 +297,7 @@ class WtmWorktableView {
     constructor() {
     }
 
-    worktableSumViewShow() {
+    static worktableSumViewShow() {
         if (document.getElementById('wtt-time-range-form')) {
             console.log('WTM Extension: Work table already enhanced.');
             WtmWorktableView.updateSum();
@@ -418,7 +451,36 @@ class WtmDialog {
 }
 
 /**
- * JIRA API connector.
+ * Wraps log functions to make them more functional.
+ */
+class ULog {
+    static log = tee(console.log);
+    static error = tee(console.error);
+    static warn = tee(console.warn);
+    static info = tee(console.info);
+    static debug = tee(console.debug);
+    static trace = tee(console.trace);
+}
+
+function jiraBrowseIssueUrl(domain) {
+    return domain + '/browse';
+}
+
+const stripSlashes = (s) => s
+    .replace(/^\//, '')
+    .replace(/\/?$/, '');
+
+/**
+ * @param {...string} resource path
+ * @return {function(string): string}
+ */
+const jiraRestApiResource = (...resource) => (domain) =>
+    `${domain}/rest/api/2/${resource.map(stripSlashes).join('/')}`;
+
+const jiraRestApiIssueUrl = (issue) => jiraRestApiResource('issue', issue);
+
+/**
+ * JIRA API connector and utils.
  */
 class Jira4U {
 
@@ -433,27 +495,137 @@ class Jira4U {
         return WorkDescription.parse(desc);
     }
 
+    static getProjectCode(issueKey) {
+        if (typeof issueKey !== 'string' || !jiraIssueProjectPattern.test(issueKey)) {
+            return Promise.reject(new Error(`Invalid argument issueKey: "${issueKey}", expected an issue key`));
+        }
+        return Promise.of(issueKey.match(jiraIssueProjectPattern)[1]);
+    }
+
+    /**
+     * Constructs a base of an HTTP request for json data and GET method.
+     *
+     * @param {string} url
+     * @return {Request} Pre-filled request object for GM_xmlhttpRequest
+     */
+    static getJsonRequest = (url) => ({
+        method: 'GET',
+        headers: {'Accept': 'application/json'},
+        url: url,
+        onreadystatechange: function (res) {
+            console.debug(`Processing request: [${url}], state: ${res.readyState}`);
+        }
+    });
+
+    /**
+     * @param {Function} onprogress
+     * @return {function(Object): Object}
+     */
+    static setOnProgressCallback = (onprogress) => (request) =>
+        Object.assign(request, {onreadystatechange: onprogress});
+
+    /**
+     * Triggers the actual http request.
+     *
+     * @param {Request} requestParams
+     * @return {Promise<Response>} A Promise which resolves with the http response.
+     */
+    static request(requestParams) {
+        return new Promise((resolve, reject) => {
+            // noinspection JSUnresolvedFunction
+            GM_xmlhttpRequest(
+                Object.assign(requestParams, {
+                    onload: resolve,
+                    onerror: reject
+                }))
+        });
+    }
+
+    static isStatusOk = (response) => (response.status === 200);
+
+    static validateResponse(validator) {
+        return (response) => new Promise(function validate(resolve, reject) {
+            validator(response)
+                ? resolve(response)
+                : reject({
+                    failure: {
+                        url: response.finalUrl,
+                        response
+                    }
+                });
+        });
+    }
+
+    static validateStatusOk = Jira4U.validateResponse(Jira4U.isStatusOk);
+
+    static parseResponse(response) {
+        return JSON.parse(response.responseText);
+    }
+
+    //TODO there are several places that use the url constant. Should they all use memoized version of this? Or should we keep the state somewhere?
+    /**
+     * Resolve url of the JIRA in which requested project exists.
+     *
+     * @param {string} projectCode Just the project prefix of a JIRA issue.
+     * @return {Promise<string>} JIRA url
+     */
+    static async getJiraUrlForProject(projectCode) {
+        if (!Jira4U.getJiraUrlForProject.cache) {
+            Jira4U.getJiraUrlForProject.cache = {};
+            Jira4U._loadAllProjects()
+                .then(jpa => jpa
+                    .filter(jp => jp.success)
+                    .reduce(jp => jp.success.projects
+                        .reduce((cache, p) => assoc(cache, p, jp.success.jira), Jira4U.getJiraUrlForProject.cache))
+                )
+            //todo branch off the failures. Overall:
+            // If: code is found -> do nothing
+            // else if:
+            // none failed -> cache this non-existent code and return a failure
+            // any failed -> resolve errors, (show login links)
+        }
+        const cacheElement = Jira4U.getJiraUrlForProject.cache[projectCode];
+        console.debug(`Resolved code '${projectCode}' as JIRA project '${cacheElement}'`);
+        //fixme return resolved url
+        return jiraEuUrl;
+    }
+
+    static _loadAllProjects() {
+        return Promise.all([jiraEuUrl, jiraComUrl].map(Jira4U._loadAllProjectsFrom));
+    }
+
+    static _loadAllProjectsFrom(jiraUrl) {
+        const getProjects = prj => ({
+            success: {
+                jira: jiraUrl,
+                projects: prj.map(p => p.key)
+            }
+        });
+        return Promise.of(jiraRestApiResource('project')(jiraUrl))
+            .then(tee(url => ULog.log(`Loading JIRA projects from [${url}]`)))
+            .then(Jira4U.getJsonRequest)
+            .then(Jira4U.request)
+            .then(Jira4U.validateStatusOk)
+            .then(Jira4U.parseResponse)
+            .then(getProjects)
+            //todo this nests the same error structure if it catches the validation error
+            .catch(err => ({failure: {jira: jiraUrl, error: err}}))
+            .then(ULog.error);
+    }
+
     /**
      * @param {string} key JIRA issue key string
      * @param {?Function} onprogress Optional loading progress callback
      * @return {Promise}
      */
     static loadIssue(key, onprogress) {
-        return new Promise((resolve, reject) => {
-            // noinspection JSUnresolvedFunction
-            GM_xmlhttpRequest(
-                {
-                    method: 'GET',
-                    headers: {"Accept": "application/json"},
-                    url: jiraRestApiUrlIssue.concat("/", key),
-                    onreadystatechange: onprogress || function (res) {
-                        console.log("Request state: " + res.readyState);
-                    },
-                    onload: resolve,
-                    onerror: reject
-                }
-            );
-        });
+        return Jira4U.getProjectCode(key)
+            .then(Jira4U.getJiraUrlForProject)
+            .then(jiraRestApiIssueUrl(key))
+            .then(Jira4U.getJsonRequest)
+            .then(Jira4U.setOnProgressCallback(onprogress))
+            .then(Jira4U.request)
+            ;
     }
 
     /**
@@ -464,6 +636,7 @@ class Jira4U {
      * @param {Function} [workInfo.onReadyStateChange] Callback to be invoked when the request state changes.
      * @return {Promise}
      */
+    //todo pass in correct jira url
     static logWork(workInfo) {
         console.log(`Sending a work log request. Issue=${workInfo.key}, Time spent=${workInfo.duration}minutes, Comment="${workInfo.comment}"`);
         return new Promise((resolve, reject) => {
@@ -480,7 +653,7 @@ class Jira4U {
                     },
                     data: `{
                         "timeSpentSeconds": ${workInfo.duration},
-                        "started": "${this.toIsoString(workInfo.started)}",
+                        "started": "${this._toIsoString(workInfo.started)}",
                         "comment": "${workInfo.comment}"
                     }`,
                     url: jiraRestApiUrlIssue.concat("/", workInfo.key, "/worklog"),
@@ -498,7 +671,7 @@ class Jira4U {
      * @param {Date} date Valid Date object to be formatted.
      * @returns {string}
      */
-    static toIsoString(date) {
+    static _toIsoString(date) {
         let offset = -date.getTimezoneOffset(),
             offsetSign = offset >= 0 ? '+' : '-',
             pad = function (num) {
@@ -519,24 +692,33 @@ class Jira4U {
 
 /**
  * JIRA issue visualisation functions.
+ *
+ * Most of this object is stateless functions
+ * with the exception of currently visualised JIRA issue,
+ * because it is repeatedly accessed when user changes
+ * the working time to update the worklog bar.
  */
 class IssueVisual {
 
     constructor() {
-        this.init();
+        IssueVisual.init();
     }
 
-    init() {
+    /**
+     * Install JIRA issue GUI into the worklog dialog.
+     * Checks whether the GUI has already been added before
+     * making any DOM changes, so repeated calls have no effect.
+     */
+    static init() {
         if (document.getElementById('jira-toolbar-envelope')) {
             console.log("JIRA toolbar was already added to form.");
             return;
         }
         IssueVisual.addToForm();
-        this._issue = null;
     }
 
     /**
-     * Adds jira issue container to the form.
+     * Adds jira issue GUI to the time sheet form.
      */
     static addToForm() {
         console.log("Adding JIRA toolbar into form");
@@ -594,38 +776,40 @@ class IssueVisual {
     }
 
     /**
-     * Display a loaded JIRA issue in the form as a link.
-     * @param issue The JIRA issue object as fetched from JIRA rest API
-     * @param {string} issue.key The key of the JIRA issue, e.g. XYZ-1234
-     * @param {string} issue.fields.summary The JIRA issue summary, i.e. the title of the ticket.
+     * Display a loaded JIRA issue in the form as a link
+     * and update the time tracker.
+     *
+     * @param {JiraIssue} issue The JIRA issue object as fetched from JIRA rest API
      */
-    showIssue(issue) {
-        this._issue = issue;
+    static showIssue(issue) {
         IssueVisual.$jiraIssueSummary().empty().append(`<a href="${jiraBrowseIssue}/${issue.key}" target="_blank">${issue.key} - ${issue.fields.summary}</a>`);
-        this.trackWork();
+        IssueVisual.trackWorkOf(issue);
     }
 
-    showIssueLoadingProgress() {
+    /**
+     * Displays some fancy animation at the place of the JIRA issue summary.
+     */
+    static showIssueLoadingProgress() {
         IssueVisual.$jiraIssueSummary().empty().append(`${jiraIssueLoaderAnimation}`);
-        this.trackWork();
+        IssueVisual.resetWorkTracker();
     }
 
     /**
      * Sets the currently displayed JIRA issue to null and resets all the visualisation.
      */
-    resetIssue() {
-        this._issue = null;
+    static resetIssue() {
         IssueVisual.resetWorkTracker();
     }
 
     /**
      * Display a visual work log time tracker of the current JIRA issue in the form.
      */
-    trackWork() {
-        if (this._issue) {
-            const orig = this._issue.fields.timetracking.originalEstimateSeconds || 0;
-            const remain = this._issue.fields.timetracking.remainingEstimateSeconds || 0;
-            const logged = this._issue.fields.timetracking.timeSpentSeconds || 0;
+    static updateWorkTracker() {
+        if (IssueVisual._issue) {
+            const issue = IssueVisual._issue;
+            const orig = issue.fields.timetracking.originalEstimateSeconds || 0;
+            const remain = issue.fields.timetracking.remainingEstimateSeconds || 0;
+            const logged = issue.fields.timetracking.timeSpentSeconds || 0;
             const added = WtmDialog.getDurationSeconds();
             const total = Math.max(orig + remain, logged + added);
             const percentOfTotal = (x) => total > 0 ? x / total * 100 : 0;
@@ -638,12 +822,13 @@ class IssueVisual {
                 e.alt = e.title;
             };
             setWidth('jiraOrigEstimate', percentOfTotal(orig));
-            setTitle('jiraOrigEstimate', this._issue.fields.timetracking.originalEstimate);
+            setTitle('jiraOrigEstimate', issue.fields.timetracking.originalEstimate);
             setWidth('jiraRemainEstimate', percentOfTotal(remain));
-            setTitle('jiraRemainEstimate', this._issue.fields.timetracking.remainingEstimate);
+            setTitle('jiraRemainEstimate', issue.fields.timetracking.remainingEstimate);
             setWidth('jiraWorkLogged', percentOfTotal(logged));
-            setTitle('jiraWorkLogged', this._issue.fields.timetracking.timeSpent);
+            setTitle('jiraWorkLogged', issue.fields.timetracking.timeSpent);
             setWidth('jiraWorkLogging', percentOfTotal(added));
+            setTitle('jiraWorkLogging', added / 3600 + 'h');
             const remainTotal = 100 - percentOfTotal(logged + added);
             setWidth('jiraWorkRemainTotal', remainTotal);
             const remainCell = document.getElementById('jiraWorkRemainTotal');
@@ -653,44 +838,104 @@ class IssueVisual {
             IssueVisual.resetWorkTracker();
     }
 
+    /**
+     * Sets currently displayed JIRA issue for the time tracker bar.
+     * This is the only state held by IssueVisual class.
+     *
+     * @typedef JiraIssue
+     * @property {string} key The key of the JIRA issue, e.g. XYZ-1234
+     * @property {string} fields.summary The JIRA issue summary, i.e. the title of the ticket.
+     * @property {?number} fields.timetracking.originalEstimateSeconds
+     * @property {?number} fields.timetracking.remainingEstimateSeconds
+     * @property {?number} fields.timetracking.timeSpentSeconds
+     * @property {?number} fields.timetracking.originalEstimate
+     * @property {?number} fields.timetracking.remainingEstimate
+     * @property {?number} fields.timetracking.timeSpent
+     *
+     * @param {?JiraIssue} issue
+     */
+    static trackWorkOf(issue = null) {
+        IssueVisual._issue = issue;
+        IssueVisual.updateWorkTracker();
+    }
+
+    /**
+     * No JIRA issue is displayed, no work time is tracked.
+     */
     static resetWorkTracker() {
+        IssueVisual._issue = null;
         document.getElementById('jiraOrigEstimate').style.width = `0%`;
     }
 
     /**
-     * The default content to be displayed when no issue has been loaded.
+     * Displays default content when no issue has been loaded.
      */
-    showIssueDefault() {
+    static showIssueDefault() {
         IssueVisual.$jiraIssueSummary().empty().append(`<span>Zadejte kód JIRA Issue na začátek Popisu činnosti.</span>`);
-        this.resetIssue();
+        IssueVisual.resetIssue();
     }
 
-    issueLoadingFailed(responseDetail) {
-        this.resetIssue();
-        let responseErr = responseDetail.response;
-        let key = responseDetail.key;
-        const jiraIssueLink = label => `<a href="${jiraBrowseIssue}/${key}" target="_blank">${label}</a>`;
-        if (responseErr.status === 401) {
-            IssueVisual.$jiraIssueSummary().empty().append(`JIRA autentizace selhala. ${jiraIssueLink('Přihlaste se do JIRA.')}`);
-            return;
-        }
-        if (responseErr.status === 404
-            && responseErr.responseHeaders
-            && responseErr.responseHeaders.match(/content-type:\sapplication\/json/) != null) {
-            let error = JSON.parse(responseErr.responseText);
-            if (error.errorMessages) {
-                IssueVisual.$jiraIssueSummary().empty().append(`<span>Nepodařilo se načíst issue ${key}. Chyba: ${error.errorMessages.join(", ")}.</span>`);
+    /**
+     * Handles JIRA issue loading errors.
+     * Updates GUI accordingly.
+     *
+     * @typedef LoadingError
+     * @property {?Object} response.failure Optional container for caught and transformed errors.
+     * @property {?Response} response.failure.response Optional response for an Http request, possibly holding extra information about the error.
+     * @property {?Object} response.stack Uncaught errors contain the exception with its stack attribute.
+     *
+     * @param {LoadingError} errorDetail
+     */
+    issueLoadingFailed(errorDetail) {
+        IssueVisual.resetIssue();
+
+        if (errorDetail.response.failure && errorDetail.response.failure.response) {
+            let responseErr = errorDetail.response.failure.response;
+            let key = errorDetail.key;
+            if (responseErr.status === 401) {
+                IssueVisual.$jiraIssueSummary().empty().append(`JIRA autentizace selhala. ${IssueVisual.linkHtml(jiraBrowseIssue + '/' + key, 'Přihlaste se do JIRA.')}`);
+                return;
+            }
+            if (responseErr.status === 404
+                && responseErr.responseHeaders
+                && /content-type:\sapplication\/json/.test(responseErr.responseHeaders)) {
+                let error = JSON.parse(responseErr.responseText);
+                const msg = error.errorMessages ? ' Chyba: ' + error.errorMessages.join(', ') : '';
+                IssueVisual.$jiraIssueSummary().empty().append(`<span>Nepodařilo se načíst ${key}.${msg}.</span>`);
                 return;
             }
         }
-        IssueVisual.$jiraIssueSummary().empty().append(`<span>Něco se přihodilo. Budete muset ${jiraIssueLink('vykázat do JIRA ručně.')}'</span>`);
+        const unknownError = () => IssueVisual.$jiraIssueSummary().empty().append(`<span>Něco se přihodilo. Budete muset ${IssueVisual.linkHtml(jiraEuUrl, 'vykázat do JIRA ručně.')}'</span>`);
+
+        if (errorDetail.response.stack) {
+            unknownError();
+            throw errorDetail.response;
+        }
+        unknownError();
     }
 
+    static linkHtml = (href, label) => {
+        return `<a href="${href}" target="_blank">${label}</a>`;
+    };
+
+    /**
+     * Placeholder element for the JIRA issue summary.
+     * Wrapped as a jQuery object for easier content manipulation.
+     *
+     * @return {jQuery|HTMLElement}
+     */
     static $jiraIssueSummary() {
         return $(document.getElementById("parsedJiraIssue"));
     }
 
-    static showJiraIssueWorkLogRequestProgress(state, ...params) {
+    /**
+     * Display a sign next to the JIRA button
+     * to show state of writing the work log record.
+     *
+     * @param {'loading'|'done'|'error'|'idle'} state Issue loading state.
+     * @return {HTMLElement}
+     */
+    static showJiraIssueWorkLogRequestProgress(state) {
         const stateViews = {
             'loading': jiraIssueLoaderAnimation,
             'done': `✔`,
@@ -712,7 +957,8 @@ class IssueVisual {
 }
 
 /**
- * Container for a JIRA issue key + description. It can construct itself by parsing the issue key from work description.
+ * Container for a JIRA issue key + description.
+ * It can construct itself by parsing the issue key from work description.
  */
 class WorkDescription {
 
@@ -788,18 +1034,17 @@ class P4uWorklogger {
 
     workLogFormShow() {
         this.issueVisual = this.issueVisual || new IssueVisual();
-        this.issueVisual.init();
+        IssueVisual.init();
         this._previousDesctiptionValue = WtmDialog.descArea().value;
         this._previousIssue = Jira4U.tryParseIssue(this._previousDesctiptionValue);
         this.doTheMagic();
     }
 
     doTheMagic() {
-        this.issueVisual.showIssueDefault();
+        IssueVisual.showIssueDefault();
 
-        const updateWorkTracker = () => this.issueVisual.trackWork();
-        WtmDialog.timeFrom().onblur = updateWorkTracker;
-        WtmDialog.timeTo().onblur = updateWorkTracker;
+        WtmDialog.timeFrom().onblur = IssueVisual.updateWorkTracker;
+        WtmDialog.timeTo().onblur = IssueVisual.updateWorkTracker;
 
         //In case of a Work log update, there may already be some work description.
         if (WtmDialog.descArea().value) {
@@ -903,33 +1148,32 @@ class P4uWorklogger {
         IssueVisual.jiraLogWorkButton().disabled = true;
         IssueVisual.showJiraIssueWorkLogRequestProgress('idle');
         if (!wd.issueKey) {
-            this.issueVisual.showIssueDefault();
+            IssueVisual.showIssueDefault();
             return;
         }
+
         let key = wd.issueKey;
-        console.log("JIRA issue key recognized: ", key);
-        Jira4U.loadIssue(wd.issueKey, progress => {
+        console.debug("JIRA issue key recognized: ", key);
+        const showLoadingProgress = progress => {
+            console.info(`Loading jira issue ${key}, state: ${progress.readyState}`);
             if (progress.readyState === 1) {
-                this.issueVisual.showIssueLoadingProgress();
+                IssueVisual.showIssueLoadingProgress();
             }
-            console.log(`Loading jira issue ${key}, state: ${progress.readyState}`);
-        }).then(response => {
-            console.log(`Loading of issue ${key} completed.`);
+        };
+
+        Jira4U.loadIssue(key, showLoadingProgress)
+            .then(tee(_ => ULog.log(`Loading of issue ${key} completed.`)))
             //Getting into the onload function does not actually mean the status was OK
-            if (response.status === 200) {
-                console.log(`Issue ${key} loaded successfully.`);
-                let rawJiraIssue = JSON.parse(response.responseText);
-                this.issueVisual.showIssue(rawJiraIssue);
-                IssueVisual.jiraLogWorkButton().disabled = false;
-                P4uWorklogger.fillArtefactIfNeeded(rawJiraIssue);
-            } else {
-                console.log(`Failed to load issue ${key}. Status: ${response.status}`);
-                this.issueVisual.issueLoadingFailed({key, response});
-            }
-        }, responseErr => {
-            console.log(`Failed to load issue ${key}. Status: ${responseErr.status}`);
-            this.issueVisual.issueLoadingFailed({key, response: responseErr});
-        });
+            .then(Jira4U.validateStatusOk)
+            .then(tee(_ => ULog.log(`Issue ${key} loaded successfully.`)))
+            .then(Jira4U.parseResponse)
+            .then(tee(IssueVisual.showIssue))
+            .then(tee(_ => IssueVisual.jiraLogWorkButton().disabled = false))
+            .then(P4uWorklogger.fillArtefactIfNeeded)
+            .catch(responseErr => {
+                console.log(`Failed to load issue ${key}. Status: ${responseErr.status}`);
+                this.issueVisual.issueLoadingFailed({key, response: responseErr});
+            });
     }
 }
 
@@ -1020,7 +1264,6 @@ class MonthSelector {
 }
 
 const workLogger = new P4uWorklogger();
-const wtmWorktableView = new WtmWorktableView();
 const monthSelector = new MonthSelector();
 
 class WtmDomObserver {
@@ -1071,7 +1314,7 @@ class WtmDomObserver {
                         P4uWorklogger.registerKeyboardShortcuts();
                     }
                     if (isWorkTable(mutation)) {
-                        wtmWorktableView.worktableSumViewShow();
+                        WtmWorktableView.worktableSumViewShow();
                     }
 
                     if (MonthSelector.getMonthSelectorContainer()) {
