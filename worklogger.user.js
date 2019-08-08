@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.4.0
+// @version      2.4.1
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -20,9 +20,6 @@
 //Test issue - FBLI-7870
 const jiraEuUrl = 'https://jira.unicorn.eu';
 const jiraComUrl = 'https://jira.unicorn.com';
-const jiraBrowseIssue = jiraEuUrl + "/browse";
-const jiraRestApiUrl = jiraEuUrl + '/rest/api/2';
-const jiraRestApiUrlIssue = jiraRestApiUrl + '/issue';
 const jiraIssueKeyPattern = /([A-Z]+-\d+)/;
 const jiraIssueProjectPattern = /([A-Z]+)-\d+/;
 
@@ -106,8 +103,7 @@ const jiraIssueLoaderAnimation = `
 `;
 
 /**
- * Branches off the flow into a supplied function,
- * typically to perform side-effects.
+ * Branches off the flow into a supplied function, typically to perform side-effects.
  * Returns the input value.
  *
  * @param {function(*): *} f The dead-end functions, may be impure.
@@ -152,7 +148,7 @@ class LogTableDecorator {
     static replaceIssueByLink(element) {
         const issueKeyPatternGlobal = new RegExp(jiraIssueKeyPattern, "g");
         element.innerHTML = element.innerHTML
-            .replace(issueKeyPatternGlobal, `<a href="${jiraBrowseIssue}/$1" target="_blank">$1</a>`);
+            .replace(issueKeyPatternGlobal, `<a href="${jiraEuUrl + '/browse'}/$1" target="_blank">$1</a>`);
     }
 }
 
@@ -462,22 +458,46 @@ class ULog {
     static trace = tee(console.trace);
 }
 
-function jiraBrowseIssueUrl(domain) {
-    return domain + '/browse';
-}
-
 const stripSlashes = (s) => s
     .replace(/^\//, '')
     .replace(/\/?$/, '');
 
-/**
- * @param {...string} resource path
- * @return {function(string): string}
- */
-const jiraRestApiResource = (...resource) => (domain) =>
-    `${domain}/rest/api/2/${resource.map(stripSlashes).join('/')}`;
+const addRequestParameter = (parameter) => (value) => (url) => {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}${parameter}=${value}`;
+};
 
+/**
+ * @param {...string|string[]} resource path
+ * @return {function(*=): Promise<string | Error>}
+ */
+const getResourceUrl = (...resource) => (domain) => new Promise((resolve, reject) => {
+        if (domain && typeof domain === 'string') {
+            resolve(`${domain}/${resource.flat().map(stripSlashes).join('/')}`);
+        } else {
+            reject(new TypeError('Invalid url domain :' + domain));
+        }
+    }
+);
+/**
+ * @param {...string} resourcePath path
+ * @return {function(*=): Promise<string | Error>}
+ */
+const jiraRestApiResource = (...resourcePath) =>
+    getResourceUrl(['rest/api/2'].concat(resourcePath).flat(2));
+
+/**
+ * @param {...string} issue JIRA issue key
+ * @return {function(string): Promise<string|Error>} Resource url provider which takes domain as the argument.
+ */
 const jiraRestApiIssueUrl = (issue) => jiraRestApiResource('issue', issue);
+
+
+/**
+ * @param {...string} issue JIRA issue key
+ * @return {function(string): Promise<string|Error>} Resource url provider which takes domain as the argument.
+ */
+const jiraBrowseIssueUrl = (issue) => getResourceUrl('browse', issue);
 
 /**
  * JIRA API connector and utils.
@@ -495,9 +515,13 @@ class Jira4U {
         return WorkDescription.parse(desc);
     }
 
+    /**
+     * @param {string} issueKey
+     * @return {Promise<string> | Promise<void>}
+     */
     static getProjectCode(issueKey) {
         if (typeof issueKey !== 'string' || !jiraIssueProjectPattern.test(issueKey)) {
-            return Promise.reject(new Error(`Invalid argument issueKey: "${issueKey}", expected an issue key`));
+            return Promise.reject(new TypeError(`Invalid argument issueKey: "${issueKey}", expected an issue key`));
         }
         return Promise.of(issueKey.match(jiraIssueProjectPattern)[1]);
     }
@@ -543,8 +567,8 @@ class Jira4U {
 
     static isStatusOk = (response) => (response.status === 200);
 
-    static validateResponse(validator) {
-        return (response) => new Promise(function validate(resolve, reject) {
+    static validateResponse = (validator) => (response) => new Promise(
+        function validate(resolve, reject) {
             validator(response)
                 ? resolve(response)
                 : reject({
@@ -554,7 +578,6 @@ class Jira4U {
                     }
                 });
         });
-    }
 
     static validateStatusOk = Jira4U.validateResponse(Jira4U.isStatusOk);
 
@@ -569,48 +592,81 @@ class Jira4U {
      * @param {string} projectCode Just the project prefix of a JIRA issue.
      * @return {Promise<string>} JIRA url
      */
-    static async getJiraUrlForProject(projectCode) {
+    static getJiraUrlForProject(projectCode) {
         if (!Jira4U.getJiraUrlForProject.cache) {
+            //The first time this function is called, init empty cache.
             Jira4U.getJiraUrlForProject.cache = {};
-            Jira4U._loadAllProjects()
-                .then(jpa => jpa
-                    .filter(jp => jp.success)
-                    .reduce(jp => jp.success.projects
-                        .reduce((cache, p) => assoc(cache, p, jp.success.jira), Jira4U.getJiraUrlForProject.cache))
-                )
-            //todo branch off the failures. Overall:
-            // If: code is found -> do nothing
-            // else if:
-            // none failed -> cache this non-existent code and return a failure
-            // any failed -> resolve errors, (show login links)
-        }
-        const cacheElement = Jira4U.getJiraUrlForProject.cache[projectCode];
-        console.debug(`Resolved code '${projectCode}' as JIRA project '${cacheElement}'`);
-        //fixme return resolved url
-        return jiraEuUrl;
-    }
-
-    static _loadAllProjects() {
-        return Promise.all([jiraEuUrl, jiraComUrl].map(Jira4U._loadAllProjectsFrom));
-    }
-
-    static _loadAllProjectsFrom(jiraUrl) {
-        const getProjects = prj => ({
-            success: {
-                jira: jiraUrl,
-                projects: prj.map(p => p.key)
+        } else {
+            //Try to get the cached value first.
+            const cachedValue = Jira4U.getJiraUrlForProject.cache[projectCode];
+            if (typeof cachedValue === "string") {
+                console.debug(`Resolved code '${projectCode}' as JIRA project '${cachedValue}'`);
+                return Promise.of(cachedValue);
+            } else {
+                console.debug(`Resolved code '${projectCode}' as non-existent JIRA project`);
+                return Promise.reject(cachedValue);
             }
-        });
-        return Promise.of(jiraRestApiResource('project')(jiraUrl))
-            .then(tee(url => ULog.log(`Loading JIRA projects from [${url}]`)))
+        }
+
+        //No cached results, define some helper functions, then load projects from jira.
+
+        const nonExistentProject = {failure: `Project "${projectCode}" does not exist`};
+
+        function cacheAndGet(projectKey, jiraUrl) {
+            return Jira4U.getJiraUrlForProject.cache[projectKey] = jiraUrl;
+        }
+
+        return Jira4U._validateProjectEverywhere(projectCode, jiraEuUrl, jiraComUrl)
+            .then(results => {
+                    const found = results.find(result => /uses this project key/.test(result.errors.projectKey));
+                    if (found) {
+                        return Promise.of(cacheAndGet(projectCode, found.jira));
+                    } else if (results.every(result => Object.entries(result.errors).length === 0)) {
+                        return Promise.reject(cacheAndGet(projectCode, nonExistentProject));
+                    } else {
+                        // todo Handle when some request fails.
+                        return Promise.reject(cacheAndGet(projectCode, nonExistentProject));
+                    }
+                }
+            );
+    }
+
+    /**
+     * @param {string} project
+     * @param {...string} jiraUrls
+     * @return {Promise<[]<JiraProjectResult|Object>>} Projects per JIRA url or errors.
+     * @private
+     */
+    static _validateProjectEverywhere(project, ...jiraUrls) {
+        return Promise.all(jiraUrls.map(url => Jira4U._validateProjectAt(project, url)));
+    }
+
+    /**
+     * @typedef JiraError What comes from JIRA projectvalidate resource
+     * @property {string[]} errorMessages
+     * @property {Object} errors
+     *
+     * @typedef JiraProjectResult
+     * @property {string} jira jiraUrl
+     * @augments JiraError
+     *
+     * @param {string} project
+     * @param {string} jiraUrl
+     * @return {Promise<JiraProjectResult | Object>}
+     * @private
+     */
+    static _validateProjectAt(project, jiraUrl) {
+        return Promise.of(jiraUrl)
+            .then(jiraRestApiResource('projectvalidate', 'key'))
+            .then(addRequestParameter('key')(project))
+            .then(tee(url => ULog.log(`Validating JIRA project: [${url}]`)))
             .then(Jira4U.getJsonRequest)
             .then(Jira4U.request)
             .then(Jira4U.validateStatusOk)
             .then(Jira4U.parseResponse)
-            .then(getProjects)
-            //todo this nests the same error structure if it catches the validation error
-            .catch(err => ({failure: {jira: jiraUrl, error: err}}))
-            .then(ULog.error);
+            .then(p => assoc(p, 'jira', jiraUrl))
+            .then(tee(res => ULog.debug(`Validated project "${project}": ${res}`)));
+        // .catch(ULog.error);
     }
 
     /**
@@ -621,11 +677,12 @@ class Jira4U {
     static loadIssue(key, onprogress) {
         return Jira4U.getProjectCode(key)
             .then(Jira4U.getJiraUrlForProject)
+            .then(tee(url => ULog.debug('project code url: ' + url)))
             .then(jiraRestApiIssueUrl(key))
+            .then(tee(url => ULog.log(`Resolved JIRA issue url: [${url}]`)))
             .then(Jira4U.getJsonRequest)
             .then(Jira4U.setOnProgressCallback(onprogress))
-            .then(Jira4U.request)
-            ;
+            .then(Jira4U.request);
     }
 
     /**
@@ -639,9 +696,10 @@ class Jira4U {
     //todo pass in correct jira url
     static logWork(workInfo) {
         console.log(`Sending a work log request. Issue=${workInfo.key}, Time spent=${workInfo.duration}minutes, Comment="${workInfo.comment}"`);
-        return new Promise((resolve, reject) => {
-            // noinspection JSUnresolvedFunction
-            GM_xmlhttpRequest(
+        return Jira4U.getProjectCode(workInfo.key)
+            .then(Jira4U.getJiraUrlForProject)
+            .then(jiraRestApiResource('issue', workInfo.key, 'worklog'))
+            .then(url => (
                 {
                     method: 'POST',
                     headers: {
@@ -651,18 +709,16 @@ class Jira4U {
                         //Previous header does not work for requests from a web browser
                         "User-Agent": "xx"
                     },
-                    data: `{
-                        "timeSpentSeconds": ${workInfo.duration},
-                        "started": "${this._toIsoString(workInfo.started)}",
-                        "comment": "${workInfo.comment}"
-                    }`,
-                    url: jiraRestApiUrlIssue.concat("/", workInfo.key, "/worklog"),
-                    onreadystatechange: workInfo.onReadyStateChange,
-                    onload: resolve,
-                    onerror: reject
-                }
+                    data: JSON.stringify({
+                        timeSpentSeconds: workInfo.duration,
+                        started: Jira4U._toIsoString(workInfo.started),
+                        comment: workInfo.comment,
+                    }),
+                    url: url,
+                    onreadystatechange: workInfo.onReadyStateChange
+                })
             )
-        });
+            .then(Jira4U.request);
     }
 
     /**
@@ -782,7 +838,17 @@ class IssueVisual {
      * @param {JiraIssue} issue The JIRA issue object as fetched from JIRA rest API
      */
     static showIssue(issue) {
-        IssueVisual.$jiraIssueSummary().empty().append(`<a href="${jiraBrowseIssue}/${issue.key}" target="_blank">${issue.key} - ${issue.fields.summary}</a>`);
+        Jira4U.getProjectCode(issue.key)
+            .then(Jira4U.getJiraUrlForProject)
+            .then(jiraRestApiResource)
+            .then(jUrl =>
+                IssueVisual.$jiraIssueSummary()
+                    .empty()
+                    .append(IssueVisual.linkHtml(`${jUrl}/browse/${issue.key}`, `${issue.key} - ${issue.fields.summary}`)))
+            .catch(_ => {
+                console.error('Failed to resolve url for issue ' + issue);
+                IssueVisual.$jiraIssueSummary().empty().append(`${issue.key} - ${issue.fields.summary}`);
+            });
         IssueVisual.trackWorkOf(issue);
     }
 
@@ -889,11 +955,25 @@ class IssueVisual {
     issueLoadingFailed(errorDetail) {
         IssueVisual.resetIssue();
 
+        function replaceIssueSummary(content) {
+            IssueVisual.$jiraIssueSummary().empty().append(content);
+        }
+
         if (errorDetail.response.failure && errorDetail.response.failure.response) {
             let responseErr = errorDetail.response.failure.response;
             let key = errorDetail.key;
-            if (responseErr.status === 401) {
-                IssueVisual.$jiraIssueSummary().empty().append(`JIRA autentizace selhala. ${IssueVisual.linkHtml(jiraBrowseIssue + '/' + key, 'Přihlaste se do JIRA.')}`);
+            if (responseErr.status === 401 || responseErr.status === 403) {
+            debugger;
+                Jira4U.getProjectCode(key)
+                    .then(Jira4U.getJiraUrlForProject)
+                    .then(jiraBrowseIssueUrl(key))
+                    .then(url =>
+                        replaceIssueSummary(`JIRA autentizace selhala. ${IssueVisual.linkHtml(url, 'Přihlaste se do JIRA.')}`)
+                    )
+                    .catch(_ => {
+                        console.error('Failed to resolve url for issue ' + key);
+                        replaceIssueSummary(`JIRA autentizace selhala. Přihlaste se do JIRA.)}`);
+                    });
                 return;
             }
             if (responseErr.status === 404
