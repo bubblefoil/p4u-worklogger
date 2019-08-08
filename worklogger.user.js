@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.4.2
+// @version      2.4.3
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -20,6 +20,7 @@
 //Test issue - FBLI-7870
 const jiraEuUrl = 'https://jira.unicorn.eu';
 const jiraComUrl = 'https://jira.unicorn.com';
+const jiraRestApiPath = 'rest/api/2';
 const jiraIssueKeyPattern = /([A-Z]+-\d+)/;
 const jiraIssueProjectPattern = /([A-Z]+)-\d+/;
 
@@ -473,18 +474,19 @@ const addRequestParameter = (parameter) => (value) => (url) => {
  */
 const getResourceUrl = (...resource) => (domain) => new Promise((resolve, reject) => {
         if (domain && typeof domain === 'string') {
-            resolve(`${domain}/${resource.flat().map(stripSlashes).join('/')}`);
+            resolve(`${stripSlashes(domain)}/${resource.flat().map(stripSlashes).join('/')}`);
         } else {
             reject(new TypeError('Invalid url domain :' + domain));
         }
     }
 );
+
 /**
  * @param {...string} resourcePath path
  * @return {function(*=): Promise<string | Error>}
  */
 const jiraRestApiResource = (...resourcePath) =>
-    getResourceUrl(['rest/api/2'].concat(resourcePath).flat(2));
+    getResourceUrl([jiraRestApiPath].concat(resourcePath).flat(2));
 
 /**
  * @param {...string} issue JIRA issue key
@@ -868,17 +870,10 @@ class IssueVisual {
      *
      * @param {JiraIssue} issue The JIRA issue object as fetched from JIRA rest API
      */
-    static showIssue(issue) {
-        Jira4U.getProjectCode(issue.key)
-            .then(Jira4U.getJiraUrlForProject)
-            .then(jiraRestApiResource)
-            .then(jUrl =>
-                IssueVisual.$showInIssueSummary(
-                    IssueVisual.linkHtml(`${jUrl}/browse/${issue.key}`, `${issue.key} - ${issue.fields.summary}`)))
-            .catch(_ => {
-                console.error('Failed to resolve url for issue ' + issue);
-                IssueVisual.$showInIssueSummary(`${issue.key} - ${issue.fields.summary}`);
-            });
+    static async showIssue(issue) {
+        const domain = issue.self.slice(0, issue.self.indexOf(jiraRestApiPath));
+        const url = await jiraBrowseIssueUrl(issue.key)(domain);
+        IssueVisual.$showInIssueSummary(IssueVisual.linkHtml(url, `${issue.key} - ${issue.fields.summary}`));
         IssueVisual.trackWorkOf(issue);
     }
 
@@ -941,6 +936,7 @@ class IssueVisual {
      * @typedef JiraIssue
      * @property {string} key The key of the JIRA issue, e.g. XYZ-1234
      * @property {string} fields.summary The JIRA issue summary, i.e. the title of the ticket.
+     * @property {string} self JIRA link to this issue.
      * @property {?number} fields.timetracking.originalEstimateSeconds
      * @property {?number} fields.timetracking.remainingEstimateSeconds
      * @property {?number} fields.timetracking.timeSpentSeconds
