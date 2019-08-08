@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.3.1
+// @version      2.3.2
 // @namespace    https://uuos9.plus4u.net/
 // @author       bubblefoil
 // @license      MIT
@@ -50,6 +50,7 @@ if (!pageCheck.isWorkLogFormPage()) {
     .wtm-month-switch-button-icon {
         color: #616161;
         font-size: 20px;
+        height: fit-content;
     }
     `);
 }
