@@ -31,6 +31,8 @@ Eventually, this script may come packed as a standalone browser extension.
 ***
 
 ### Changelog
+- **2.4**
+    - Add support for both `jira.eu` and `jira.com`. Recognizes domain by project.
 - **2.3.1**
     - Fixed styling of month table enhancements
 - **2.3.0**
