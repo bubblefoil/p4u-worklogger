@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.4.6
+// @version      2.4.7
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -1011,7 +1011,9 @@ class IssueVisual {
                     )
                     .catch(_ => {
                         console.error('Failed to resolve url for issue ' + key);
-                        IssueVisual.$showInIssueSummary(`JIRA autentizace selhala. Přihlaste se do JIRA.)}`);
+                        IssueVisual.$showInIssueSummary(
+                            `JIRA autentizace selhala.<br>
+Přihlaste se do ${IssueVisual.linkHtml(jiraEuUrl, 'jira.unicorn.eu')} nebo ${IssueVisual.linkHtml(jiraComUrl, 'jira.unicorn.com')}.`);
                     });
             } else if (status === 404) {
                 getErrorMessages(error.response)
