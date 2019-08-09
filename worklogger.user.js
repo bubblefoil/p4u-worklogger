@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.4.3
+// @version      2.4.4
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -503,31 +503,42 @@ const jiraRestApiIssueUrl = (issue) => jiraRestApiResource('issue', issue);
 const jiraBrowseIssueUrl = (issue) => getResourceUrl('browse', issue);
 
 class InvalidResponse {
-    url;
-    response;
-
     /**
      * @param {HttpResponse} response
      */
     constructor(response) {
-        this.url = response.finalUrl;
-        this.response = response;
+        this._url = response.finalUrl;
+        this._response = response;
+    }
+
+    get response() {
+        return this._response;
+    }
+
+    get url() {
+        return this._url;
     }
 }
 
 class InvalidProjectError {
-    projectKey;
 
     constructor(projectKey) {
-        this.projectKey = projectKey;
+        this._projectKey = projectKey;
+    }
+
+    get projectKey() {
+        return this._projectKey;
     }
 }
 
 class ProjectLoadingError {
-    projectKey;
 
     constructor(projectKey) {
-        this.projectKey = projectKey;
+        this._projectKey = projectKey;
+    }
+
+    get projectKey() {
+        return this._projectKey;
     }
 }
 
