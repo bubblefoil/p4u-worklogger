@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.4.7
+// @version      2.4.8
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -664,13 +664,18 @@ class Jira4U {
 
         return Jira4U._validateProjectEverywhere(projectCode, jiraEuUrl, jiraComUrl)
             .then(results => {
-                    const found = results.find(result => /uses this project key/.test(result.errors.projectKey));
-                    if (found) {
-                        return Promise.of(cacheAndGet(projectCode, found.jira));
-                    } else if (results.every(result => Object.entries(result.errors).length === 0)) {
+                //We do want the errors property, that's the response
+                const isOk = r => typeof r.errors !== 'undefined';
+                const foundProject = results
+                    .filter(isOk)
+                    .find(result => /uses this project key/.test(result.errors.projectKey));
+                if (foundProject) {
+                    return Promise.of(cacheAndGet(projectCode, foundProject.jira));
+                } else if (results.every(isOk) && results.every(result => Object.entries(result.errors).length === 0)) {
                         return Promise.reject(cacheAndGet(projectCode, new InvalidProjectError(projectCode)));
                     } else {
-                        // Handle cases when some request fails.
+                    // In case something failed and we did not find the project code
+                    // in another response, there's not much left to do.
                         return Promise.reject(new ProjectLoadingError(projectCode));
                     }
                 }
@@ -708,10 +713,12 @@ class Jira4U {
             .then(tee(url => log(`Validating JIRA project: [${url}]`)))
             .then(getJsonRequest)
             .then(Jira4U.request)
-            .then(Jira4U.validateStatusOk)
+            .then(res => Jira4U.validateStatusOk(res))
             .then(Jira4U.parseResponse)
             .then(p => assoc(p, 'jira', jiraUrl))
-            .then(tee(res => debug(`Validated project "${project}": ${res}`)));
+            .then(tee(res => debug(`Validated project "${project}": ${res}`)))
+            .catch(err => Promise.of(err).then(log))
+            ;
     }
 
     /**
@@ -1175,6 +1182,11 @@ class P4uWorklogger {
         WtmDialog.timeFrom().onblur = IssueVisual.updateWorkTracker;
         WtmDialog.timeTo().onblur = IssueVisual.updateWorkTracker;
 
+        //Chrome fires DOM events for textContent changes even during typing, FF does not.
+        //So we add input listener and paranoidly make sure we do not add it more than once.
+        const descriptionChangeListener = ev => workLogger.checkWorkDescriptionChanged(ev.target.value);
+        WtmDialog.descArea().removeEventListener('input', descriptionChangeListener);
+        WtmDialog.descArea().addEventListener('input', descriptionChangeListener);
         //In case of a Work log update, there may already be some work description.
         if (WtmDialog.descArea().value) {
             const wd = Jira4U.tryParseIssue(WtmDialog.descArea().value);
