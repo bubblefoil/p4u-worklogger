@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.4.4
+// @version      2.4.5
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -452,12 +452,29 @@ class WtmDialog {
  * Wraps log functions to make them more functional.
  */
 class ULog {
-    static log = tee(console.log);
-    static error = tee(console.error);
-    static warn = tee(console.warn);
-    static info = tee(console.info);
-    static debug = tee(console.debug);
-    static trace = tee(console.trace);
+    static log(m) {
+        return tee(console.log)(m);
+    }
+
+    static error(m) {
+        return tee(console.error)(m);
+    };
+
+    static warn(m) {
+        return tee(console.warn)(m);
+    };
+
+    static info(m) {
+        return tee(console.info)(m);
+    };
+
+    static debug(m) {
+        return tee(console.debug)(m);
+    };
+
+    static trace(m) {
+        return tee(console.trace)(m);
+    };
 }
 
 const stripSlashes = (s) => s
