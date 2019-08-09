@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.4.5
+// @version      2.4.6
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -449,33 +449,15 @@ class WtmDialog {
 }
 
 /**
- * Wraps log functions to make them more functional.
+ * Wrap log functions to make them more functional.
+ * Cannot be wrapped in a class because FF does not support fields and standard function syntax is horribly bloated.
  */
-class ULog {
-    static log(m) {
-        return tee(console.log)(m);
-    }
-
-    static error(m) {
-        return tee(console.error)(m);
-    };
-
-    static warn(m) {
-        return tee(console.warn)(m);
-    };
-
-    static info(m) {
-        return tee(console.info)(m);
-    };
-
-    static debug(m) {
-        return tee(console.debug)(m);
-    };
-
-    static trace(m) {
-        return tee(console.trace)(m);
-    };
-}
+const log = tee(console.log);
+const error = tee(console.error);
+const warn = tee(console.warn);
+const info = tee(console.info);
+const debug = tee(console.debug);
+const trace = tee(console.trace);
 
 const stripSlashes = (s) => s
     .replace(/^\//, '')
@@ -560,6 +542,21 @@ class ProjectLoadingError {
 }
 
 /**
+ * Constructs a base of an HTTP request for json data and GET method.
+ *
+ * @param {string} url
+ * @return {Request} Pre-filled request object for GM_xmlhttpRequest
+ */
+const getJsonRequest = (url) => ({
+    method: 'GET',
+    headers: {'Accept': 'application/json'},
+    url: url,
+    onreadystatechange: function (res) {
+        console.debug(`Processing request: [${url}], state: ${res.readyState}`);
+    }
+});
+
+/**
  * JIRA API connector and utils.
  */
 class Jira4U {
@@ -587,27 +584,12 @@ class Jira4U {
     }
 
     /**
-     * Constructs a base of an HTTP request for json data and GET method.
-     *
-     * @param {string} url
-     * @return {Request} Pre-filled request object for GM_xmlhttpRequest
-     */
-    static getJsonRequest = (url) => ({
-        method: 'GET',
-        headers: {'Accept': 'application/json'},
-        url: url,
-        onreadystatechange: function (res) {
-            console.debug(`Processing request: [${url}], state: ${res.readyState}`);
-        }
-    });
-
-    /**
      * @param {Function} onprogress
      * @return {function(Object): Object}
      */
-    static setOnProgressCallback = (onprogress) => (request) =>
-        Object.assign(request, {onreadystatechange: onprogress});
-
+    static setOnProgressCallback(onprogress) {
+        return (request) => Object.assign(request, {onreadystatechange: onprogress});
+    }
     /**
      * Triggers the actual http request.
      *
@@ -723,13 +705,13 @@ class Jira4U {
         return Promise.of(jiraUrl)
             .then(jiraRestApiResource('projectvalidate', 'key'))
             .then(addRequestParameter('key')(project))
-            .then(tee(url => ULog.log(`Validating JIRA project: [${url}]`)))
-            .then(Jira4U.getJsonRequest)
+            .then(tee(url => log(`Validating JIRA project: [${url}]`)))
+            .then(getJsonRequest)
             .then(Jira4U.request)
             .then(Jira4U.validateStatusOk)
             .then(Jira4U.parseResponse)
             .then(p => assoc(p, 'jira', jiraUrl))
-            .then(tee(res => ULog.debug(`Validated project "${project}": ${res}`)));
+            .then(tee(res => debug(`Validated project "${project}": ${res}`)));
     }
 
     /**
@@ -740,10 +722,10 @@ class Jira4U {
     static loadIssue(key, onprogress) {
         return Jira4U.getProjectCode(key)
             .then(Jira4U.getJiraUrlForProject)
-            .then(tee(url => ULog.debug('project code url: ' + url)))
+            .then(tee(url => debug('project code url: ' + url)))
             .then(jiraRestApiIssueUrl(key))
-            .then(tee(url => ULog.log(`Resolved JIRA issue url: [${url}]`)))
-            .then(Jira4U.getJsonRequest)
+            .then(tee(url => log(`Resolved JIRA issue url: [${url}]`)))
+            .then(getJsonRequest)
             .then(Jira4U.setOnProgressCallback(onprogress))
             .then(Jira4U.request);
     }
@@ -1035,7 +1017,7 @@ class IssueVisual {
                 getErrorMessages(error.response)
                     .then(msg => IssueVisual.$showInIssueSummary(`<span>Nepodařilo se načíst ${key}.${msg}.</span>`))
                     .catch(err =>
-                        ULog.error(`Failed to load issue ${key}. Response: ${err}`)
+                        error(`Failed to load issue ${key}. Response: ${err}`)
                             .then(_ => IssueVisual.$showInIssueSummary(`<span>Nepodařilo se načíst ${key}. Chyba: 404</span>`)));
             }
         } else if (error instanceof InvalidProjectError) {
@@ -1048,12 +1030,12 @@ class IssueVisual {
                 unknownError();
                 throw error;
             }
-            ULog.error('Unknown error: ' + error)
+            error('Unknown error: ' + error)
                 .then(unknownError);
         }
     }
 
-    static linkHtml = (href, label) => {
+    static linkHtml(href, label) {
         return `<a href="${href}" target="_blank">${label}</a>`;
     };
 
@@ -1307,10 +1289,10 @@ class P4uWorklogger {
         };
 
         Jira4U.loadIssue(key, showLoadingProgress)
-            .then(tee(_ => ULog.log(`Loading of issue ${key} completed.`)))
+            .then(tee(_ => log(`Loading of issue ${key} completed.`)))
             //Getting into the onload function does not actually mean the status was OK
             .then(Jira4U.validateStatusOk)
-            .then(tee(_ => ULog.log(`Issue ${key} loaded successfully.`)))
+            .then(tee(_ => log(`Issue ${key} loaded successfully.`)))
             .then(Jira4U.parseResponse)
             .then(tee(IssueVisual.showIssue))
             .then(tee(_ => IssueVisual.jiraLogWorkButton().disabled = false))
