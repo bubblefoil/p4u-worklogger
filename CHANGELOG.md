@@ -1,4 +1,7 @@
 # Changelog
+- **2.5**
+    - Add time input by up/down arrow keys
+    - Add Ctrl + Shift + Enter shortcut
 - **2.4.4**
     - Fix Firefox compatibility
 - **2.4**

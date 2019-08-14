@@ -8,6 +8,7 @@ The browser user script which enhances the Working Time Management.
 - Writes a work log record directly into JIRA the moment it is created in Working Time Management.
 - Adds some keyboard shortcuts & mnemonics. (See access keys usage in your OS/browser.)
 - Calculates sum of working hours for a custom range of days within selected month.
+- See [wiki page](https://github.com/bubblefoil/p4u-worklogger/wiki/Features)
 
 ***
 

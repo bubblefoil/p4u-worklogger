@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.4.8
+// @version      2.5.0
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -209,6 +209,19 @@ class WtmDateTime {
         const [day, month, year] = this.parseDate(selectedDate);
         const [hour, minute] = selectedTime.split(':').map(Number);
         return new Date(year, month - 1, day, hour, minute, 0, 0);
+    }
+
+    static padToDoubleDigit(num) {
+        const norm = Math.floor(Math.abs(num));
+        return (norm < 10 ? '0' : '') + norm;
+    }
+
+    static addHours(d, h) {
+        return this.addMinutes(d, h * 60);
+    }
+
+    static addMinutes(d, m) {
+        return new Date(d.getTime() + (m * 60 * 1000))
     }
 }
 
@@ -423,12 +436,12 @@ class WtmDialog {
                 WtmDialog.buttonOk().click();
             }
         });
-    }
-
-    /** Adds mnemonics (access keys) to the form buttons. */
-    static registerAccessKeys() {
-        this.addMnemonic(document.getElementById('form-btn-next-day_label'), "n");
-        this.addMnemonic(document.getElementById('form-btn-next_label'), "p");
+        WtmDialog.buttonNextItem().title = "Ctrl + Shift + Enter";
+        $(document).on("keydown", e => {
+            if (e.keyCode === 13 && e.ctrlKey && e.shiftKey) {
+                WtmDialog.buttonNextItem().click();
+            }
+        });
     }
 
     /**
@@ -459,6 +472,11 @@ const info = tee(console.info);
 const debug = tee(console.debug);
 const trace = tee(console.trace);
 
+/**
+ * Removes leading and trailing slash '/' character.
+ * @param s
+ * @return {string}
+ */
 const stripSlashes = (s) => s
     .replace(/^\//, '')
     .replace(/\/?$/, '');
@@ -779,12 +797,9 @@ class Jira4U {
      * @returns {string}
      */
     static _toIsoString(date) {
-        let offset = -date.getTimezoneOffset(),
-            offsetSign = offset >= 0 ? '+' : '-',
-            pad = function (num) {
-                const norm = Math.floor(Math.abs(num));
-                return (norm < 10 ? '0' : '') + norm;
-            };
+        const offset = -date.getTimezoneOffset();
+        const offsetSign = offset >= 0 ? '+' : '-';
+        const pad = WtmDateTime.padToDoubleDigit;
         return date.getFullYear()
             + '-' + pad(date.getMonth() + 1)
             + '-' + pad(date.getDate())
@@ -1201,7 +1216,12 @@ class P4uWorklogger {
 
     static registerKeyboardShortcuts() {
         WtmDialog.registerKeyboardShortcuts();
-        WtmDialog.registerAccessKeys();
+
+        const timeControlTitle = 'Použijte šipky ⬆⬇ pro změnu času';
+        WtmDialog.timeFrom().addEventListener('keydown', P4uWorklogger.shiftTime);
+        WtmDialog.timeFrom().title = timeControlTitle;
+        WtmDialog.timeTo().addEventListener('keydown', P4uWorklogger.shiftTime);
+        WtmDialog.timeTo().title = timeControlTitle;
     }
 
     static fillArtefactIfNeeded(rawJiraIssue) {
@@ -1226,6 +1246,68 @@ class P4uWorklogger {
         humanReadableIssue.type = rawJiraIssue.fields.issuetype.name;
         humanReadableIssue.issueKeyPrefix = rawJiraIssue.fields.project.key;
         return humanReadableIssue;
+    }
+
+    static getTimeAdjustmentDirection(ev) {
+        if (ev.key === 'ArrowDown') {
+            return -1;
+        } else if (ev.key === 'ArrowUp') {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    /**
+     * Updates selected work log range time based on arrow up|down key press.
+     * @param {Event} ev The keyboard event.
+     */
+    static shiftTime(ev) {
+        const input = ev.target;
+        if (input.nodeName !== 'INPUT') {
+            console.warn('Cannot shift selected time, element is not an input: ', input);
+            return;
+        }
+        const timeAdjustment = P4uWorklogger.getTimeAdjustmentDirection(ev);
+        if (timeAdjustment === 0) {
+            return;
+        }
+        ev.preventDefault();
+        //If the value is empty, try the other period boundary. This allows just adding time in an empty input.
+        const value = input.value || WtmDialog.timeFrom().value || WtmDialog.timeTo().value;
+        if (value) {
+            const selectionStart = input.selectionStart;
+            const selectionEnd = input.selectionEnd;
+            const selectionDirection = input.selectionDirection;
+            const cursorPosition = selectionDirection === 'backward' ? selectionStart : selectionEnd;
+            input.value = P4uWorklogger.updateTime(timeAdjustment, cursorPosition, value);
+            input.selectionStart = selectionStart;
+            input.selectionEnd = selectionEnd;
+            input.selectionDirection = selectionDirection;
+        }
+    }
+
+    /**
+     * Updates hours or minutes of time represented as HH:mm string.
+     * @param {number} adjustmentDirection Positive or negative number. Should be -1 or 1.
+     * @param {number} cursorPosition Index of the caret. Decides whether to change hours or minutes.
+     * @param {string} timeInputValue Time string in the input box
+     * @return {string} Shifted and formatted time
+     */
+    static updateTime(adjustmentDirection, cursorPosition, timeInputValue) {
+        const timeRegExp = /(\d{1,2}):(\d{1,2})/;
+        if (!timeRegExp.test(timeInputValue)) {
+            console.debug(`Invalid time format, cannot adjust time "${timeInputValue}"`);
+            return timeInputValue;
+        }
+        const dateTime = WtmDateTime.parseDateTime(WtmDialog.datePicker().value, timeInputValue);
+        const pad = WtmDateTime.padToDoubleDigit;
+        const formatTime = (date) => pad(date.getHours()) + ':' + pad(date.getMinutes());
+        if (cursorPosition <= timeInputValue.indexOf(':')) {
+            return formatTime(WtmDateTime.addHours(dateTime, adjustmentDirection));
+        } else {
+            return formatTime(WtmDateTime.addMinutes(dateTime, 15 * adjustmentDirection));
+        }
     }
 
     static writeWorkLogToJira() {
