@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.5.0
+// @version      2.5.1
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -1274,19 +1274,17 @@ class P4uWorklogger {
         }
         ev.preventDefault();
         //If the value is empty, try the other period boundary. This allows just adding time in an empty input.
-        const value = input.value || WtmDialog.timeFrom().value || WtmDialog.timeTo().value;
-        if (value) {
-            const selectionStart = input.selectionStart;
-            const selectionEnd = input.selectionEnd;
-            const selectionDirection = input.selectionDirection;
-            const cursorPosition = selectionDirection === 'backward' ? selectionStart : selectionEnd;
-            input.value = P4uWorklogger.updateTime(timeAdjustment, cursorPosition, value);
-            input.selectionStart = selectionStart;
-            input.selectionEnd = selectionEnd;
-            input.selectionDirection = selectionDirection;
-        }
+        const value = input.value || WtmDialog.timeFrom().value || WtmDialog.timeTo().value || '08:00';
+        const selectionStart = input.selectionStart;
+        const selectionEnd = input.selectionEnd;
+        const selectionDirection = input.selectionDirection;
+        const cursorPosition = selectionDirection === 'backward' ? selectionStart : selectionEnd;
+        input.value = P4uWorklogger.updateTime(timeAdjustment, cursorPosition, value);
+        //Following are reset when the value changes
+        input.selectionStart = selectionStart;
+        input.selectionEnd = selectionEnd;
+        input.selectionDirection = selectionDirection;
     }
-
     /**
      * Updates hours or minutes of time represented as HH:mm string.
      * @param {number} adjustmentDirection Positive or negative number. Should be -1 or 1.
