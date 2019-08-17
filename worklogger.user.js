@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.5.1
+// @version      2.5.2
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -1279,12 +1279,31 @@ class P4uWorklogger {
         const selectionEnd = input.selectionEnd;
         const selectionDirection = input.selectionDirection;
         const cursorPosition = selectionDirection === 'backward' ? selectionStart : selectionEnd;
-        input.value = P4uWorklogger.updateTime(timeAdjustment, cursorPosition, value);
-        //Following are reset when the value changes
-        input.selectionStart = selectionStart;
-        input.selectionEnd = selectionEnd;
-        input.selectionDirection = selectionDirection;
+        const newValue = P4uWorklogger.updateTime(timeAdjustment, cursorPosition, value);
+        P4uWorklogger.setInputValueWithEvent(input, newValue)
+            .then(() => {
+                    //Following are reset when the value changes
+                    input.selectionStart = selectionStart;
+                    input.selectionEnd = selectionEnd;
+                    input.selectionDirection = selectionDirection;
+                }
+            );
     }
+
+    /**
+     * Sets input.value to text in a way that React reacts to the related input event.
+     * https://stackoverflow.com/a/46012210/2471106
+     * @param input
+     * @param text
+     * @return {Promise<boolean>}
+     */
+    static async setInputValueWithEvent(input, text) {
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+        nativeInputValueSetter.call(input, text);
+        const ev2 = new Event('input', {bubbles: true});
+        return input.dispatchEvent(ev2);
+    }
+
     /**
      * Updates hours or minutes of time represented as HH:mm string.
      * @param {number} adjustmentDirection Positive or negative number. Should be -1 or 1.
