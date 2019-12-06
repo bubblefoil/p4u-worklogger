@@ -1,4 +1,6 @@
 # Changelog
+- **2.6**
+    - Prefer jira.com if a project exists at both com and eu domains
 - **2.5**
     - Add time input by up/down arrow keys
     - Add Ctrl + Shift + Enter shortcut

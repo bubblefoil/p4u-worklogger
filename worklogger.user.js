@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.5.2
+// @version      2.6.0
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -653,6 +653,7 @@ class Jira4U {
 
     /**
      * Resolve url of the JIRA in which requested project exists.
+     * If the project is found at both eu and com domains, com is preferred.
      *
      * @param {string} projectCode Just the project prefix of a JIRA issue.
      * @return {Promise<string|InvalidProjectError|ProjectLoadingError>} JIRA url
@@ -682,14 +683,23 @@ class Jira4U {
 
         return Jira4U._validateProjectEverywhere(projectCode, jiraEuUrl, jiraComUrl)
             .then(results => {
-                //We do want the errors property, that's the response
-                const isOk = r => typeof r.errors !== 'undefined';
-                const foundProject = results
-                    .filter(isOk)
-                    .find(result => /uses this project key/.test(result.errors.projectKey));
-                if (foundProject) {
+                //We do want the errors property, that's the project validation response
+                const hasNoValidationErrors = r => typeof r.errors !== 'undefined';
+                const hasProjectUsedError = result => /uses this project key/.test(result.errors.projectKey);
+                debugger
+                const foundProjects = results
+                    .filter(hasNoValidationErrors)
+                    .filter(hasProjectUsedError);
+
+                if (foundProjects.length === 1) {
+                    return Promise.of(cacheAndGet(projectCode, foundProjects[0].jira));
+                } else if (foundProjects.length > 1) {
+                    debugger
+                    // Prefer jira.com, because if a project exists at both domains, it was migrated from .eu to .com
+                    const projectAtJiraCom = foundProjects.find(result => result.jira.lastIndexOf('.com') > 0);
+                    const foundProject = projectAtJiraCom || foundProjects[0];
                     return Promise.of(cacheAndGet(projectCode, foundProject.jira));
-                } else if (results.every(isOk) && results.every(result => Object.entries(result.errors).length === 0)) {
+                } else if (results.every(hasNoValidationErrors) && results.every(result => Object.entries(result.errors).length === 0)) {
                         return Promise.reject(cacheAndGet(projectCode, new InvalidProjectError(projectCode)));
                     } else {
                     // In case something failed and we did not find the project code
