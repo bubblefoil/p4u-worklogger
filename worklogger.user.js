@@ -432,13 +432,13 @@ class WtmDialog {
     static registerKeyboardShortcuts() {
         WtmDialog.buttonOk().title = "Ctrl + Enter";
         $(document).on("keydown", e => {
-            if (e.keyCode === 13 && e.ctrlKey) {
+            if (e.code === "Enter" && e.ctrlKey) {
                 WtmDialog.buttonOk().click();
             }
         });
         WtmDialog.buttonNextItem().title = "Ctrl + Shift + Enter";
         $(document).on("keydown", e => {
-            if (e.keyCode === 13 && e.ctrlKey && e.shiftKey) {
+            if (e.code === "Enter" && e.ctrlKey && e.shiftKey) {
                 WtmDialog.buttonNextItem().click();
             }
         });
