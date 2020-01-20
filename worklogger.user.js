@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.6.1
+// @version      2.6.2
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -232,6 +232,10 @@ class WtmWorktableModel {
 
     static language() {
         return document.getElementsByClassName("uu5-bricks-language-selector-code-text")[0].textContent;
+    }
+
+    static newItemButton() {
+        return document.querySelector('button.uu-specialistwtm-create-timesheet-item-button');
     }
 
     static monthlyDetailTopTimeColumn() {
@@ -1428,12 +1432,43 @@ class P4uWorklogger {
 }
 
 /**
+ * Registers keyboard shortcuts available throughout WTM.
+ * Element titles need to be set in DomObserver because they require the element to exist while this is installed when script loads.
+ */
+class WtmGlobalShortcuts {
+
+    static install() {
+        if (WtmGlobalShortcuts.install.done) {
+            return;
+        }
+        WtmGlobalShortcuts.install.done = true;
+
+        // New work item - N
+        document.addEventListener("keypress", WtmGlobalShortcuts.keyToClick(ev => ev.code === 'KeyN', WtmWorktableModel.newItemButton));
+    }
+
+    static keyToClick(keyEventFilter, targetElement) {
+        return function keyListener(ev) {
+            if (keyEventFilter(ev)) {
+                let target = (typeof targetElement === "function") ? targetElement() : targetElement;
+                if (target && typeof target.click === "function") {
+                    target.click();
+                } else {
+                    console.warn('Cannot activate element by shortcut. Element:', target)
+                }
+            }
+        }
+    }
+}
+
+/**
  * Adds month selection buttons.
  */
 class MonthSelector {
     static getMonthSelectorContainer() {
         return document.querySelector('.uu-specialistwtm-worker-monthly-detail-top-change-month-dropdown');
     }
+
     static getMonthSelector() {
         return this.getMonthSelectorContainer().firstElementChild;
     }
@@ -1579,6 +1614,10 @@ class WtmDomObserver {
                     if (MonthSelector.getMonthSelectorContainer()) {
                         monthSelector.install();
                     }
+
+                    if (WtmWorktableModel.newItemButton()) {
+                        WtmWorktableModel.newItemButton().title = '(n)';
+                    }
                 });
         });
 
@@ -1602,3 +1641,4 @@ class WtmDomObserver {
 
 const brickObserver = new WtmDomObserver();
 brickObserver.observe();
+WtmGlobalShortcuts.install();
