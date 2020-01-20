@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.6.0
+// @version      2.6.1
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -1461,43 +1461,55 @@ class MonthSelector {
          * Index of the selected list item is updated and the neighbor item is clicked.
          *
          * @param selectedMonthText
+         * @param monthIndexFn {Function} Returns new month index
          * @return {function(*): Function}
          */
-        const selectMonth = (selectedMonthText) => (monthIndexFn) => () => {
-            const dropDown = MonthSelector.getMonthDropDown();
-            if (!dropDown) {
-                console.warn('Month drop-down menu does not exist.');
-                return;
+        const createMonthSelector = function (selectedMonthText, monthIndexFn) {
+            //This returned fn may recursively call itself to repeat the drop-down click if the menu was not rendered yet.
+            return function selectMonth(attempts = 1) {
+                const dropDown = MonthSelector.getMonthDropDown();
+                if (!dropDown) {
+                    if (attempts > 3) {
+                        console.warn('Month drop-down menu does not exist. Attempt:', attempts);
+                        return false;
+                    }
+                    MonthSelector.getMonthSelectorButton().click();
+                    //Repeat opening the dropdown and wait for rendering.
+                    window.requestAnimationFrame(() => selectMonth(++attempts));
+                    return false;
+                }
+                const selectedMonthIndex = Array
+                    .from(dropDown.children)
+                    .findIndex(li => li.innerText.trim() === selectedMonthText);
+                if (selectedMonthIndex < 0) {
+                    console.debug('Cannot find selected month:', selectedMonthText);
+                    return false;//May leave the menu opened? It may actually be desirable as a fallback scenario.
+                }
+                const newMonthIndex =
+                    Math.max(0,
+                        Math.min(dropDown.children.length - 1,
+                            monthIndexFn(selectedMonthIndex)))
+                    || selectedMonthIndex;
+                dropDown.children[newMonthIndex].firstChild.click();//LI contains an A element
+                return true;
             }
-            const selectedMonthIndex = Array
-                .from(dropDown.children)
-                .findIndex(li => li.innerText.trim() === selectedMonthText);
-            if (selectedMonthIndex < 0) {
-                console.debug('Cannot find selected month:', selectedMonthText);
-                return;//May leave the menu opened? It may actually be desirable as a fallback scenario.
-            }
-            const newMonthIndex =
-                Math.max(0,
-                    Math.min(dropDown.children.length - 1,
-                        monthIndexFn(selectedMonthIndex)))
-                || selectedMonthIndex;
-            dropDown.children[newMonthIndex].firstChild.click();//LI contains an A element
         };
 
-        const arrowClickHandler = (monthIdxUpdateFn) => (event) => {
+        const createArrowClickHandler = (monthIdxUpdateFn) => (event) => {
             console.trace('WTM Extension', 'Click:', event);
             //Show the months dropdown
             MonthSelector.getMonthSelectorButton().click();
-            //Allow browser to render the menu, then click desired month
-            setTimeout(selectMonth(MonthSelector.getSelectedMonthValue())(monthIdxUpdateFn), 0);
+            //Allow browser to render the menu, then click desired month.
+            // Using requestAnimationFrame here always caused the menu to be visible before script clicks an item in it.
+            setTimeout(createMonthSelector(MonthSelector.getSelectedMonthValue(), monthIdxUpdateFn), 0);
         };
 
         const arrowLeft = createArrow('left');
-        arrowLeft.onclick = arrowClickHandler(i => i + 1);//Months are in the reversed order
+        arrowLeft.onclick = createArrowClickHandler(i => i + 1);//Months are in the reversed order
         arrowLeft.title = _t('wtm.month.prev.title');
 
         const arrowRight = createArrow('right');
-        arrowRight.onclick = arrowClickHandler(i => i - 1);
+        arrowRight.onclick = createArrowClickHandler(i => i - 1);
         arrowRight.title = _t('wtm.month.next.title');
 
         const monthSelector = MonthSelector.getMonthSelector();
