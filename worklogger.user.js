@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.6.2
+// @version      2.6.3
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -1641,4 +1641,5 @@ class WtmDomObserver {
 
 const brickObserver = new WtmDomObserver();
 brickObserver.observe();
-WtmGlobalShortcuts.install();
+//fixme disable New item hot key when the dialog is opened
+// WtmGlobalShortcuts.install();
