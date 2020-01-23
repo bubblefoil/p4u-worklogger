@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.6.3
+// @version      2.6.4
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -115,6 +115,46 @@ const tee = (f) => (x) => {
     f(x);
     return Promise.of(x);
 };
+
+/**
+ * Returns wrapped fn which, when called, delegates the call to fn
+ * if and only if pred returns true at the time of invocation.
+ * Wrapping function passes args to Both pred and fn.
+ *
+ * @param pred {Function} predicate
+ * @param fn {Function} function to be called conditionally if pred(...args) == true
+ * @return {Function}
+ */
+function when(pred, fn) {
+    return function conditionalFn(...args) {
+        if (pred(...args)) {
+            return fn(...args);
+        }
+    }
+}
+
+/**
+ * Returns pred giving negated result.
+ */
+function not(pred) {
+    return function notPred(...args) {
+        return !pred(...args);
+    }
+}
+
+/**
+ * Returns pred giving negated result.
+ */
+function and(...preds) {
+    return function everyPred(...args) {
+        return preds.find(p => {
+            if (typeof p !== "function") {
+                throw new TypeError('All arguments of function [and] must be functions, not this thing:', p);
+            }
+            return p(...args);
+        });
+    };
+}
 
 /**
  * Pure form of attribute assignment.
@@ -255,6 +295,12 @@ class WtmWorktableModel {
         const dateCellText = tableRow.cells[1].innerText;
         const dateFields = WtmDateTime.parseDate(dateCellText);
         return dateFields[0];
+    }
+
+    static isModalDialogOpened() {
+        const modal = document.querySelector('div.uu5-bricks-page-modal');
+        const modalStyle = modal && window.getComputedStyle(modal);
+        return modalStyle && modalStyle.visibility === 'visible';
     }
 
     /**
@@ -1432,33 +1478,44 @@ class P4uWorklogger {
 }
 
 /**
- * Registers keyboard shortcuts available throughout WTM.
- * Element titles need to be set in DomObserver because they require the element to exist while this is installed when script loads.
+ * Keyboard shortcuts registration and handling.
  */
-class WtmGlobalShortcuts {
-
+class WtmShortcuts {
+    /**
+     * Registers keyboard shortcuts available throughout WTM.
+     * Element titles need to be set in DomObserver because they require the element to exist while this is installed when script loads.
+     */
     static install() {
-        if (WtmGlobalShortcuts.install.done) {
+        if (WtmShortcuts.install.done) {
             return;
         }
-        WtmGlobalShortcuts.install.done = true;
+        WtmShortcuts.install.done = true;
 
         // New work item - N
-        document.addEventListener("keypress", WtmGlobalShortcuts.keyToClick(ev => ev.code === 'KeyN', WtmWorktableModel.newItemButton));
+        document.addEventListener("keypress",
+            when(
+                and(WtmShortcuts.keyCodePred('KeyN'),
+                    not(WtmWorktableModel.isModalDialogOpened)),
+                WtmShortcuts.clickElement(WtmWorktableModel.newItemButton)));
     }
 
-    static keyToClick(keyEventFilter, targetElement) {
-        return function keyListener(ev) {
-            if (keyEventFilter(ev)) {
-                let target = (typeof targetElement === "function") ? targetElement() : targetElement;
-                if (target && typeof target.click === "function") {
-                    target.click();
-                } else {
-                    console.warn('Cannot activate element by shortcut. Element:', target)
-                }
+    static clickElement(targetElement) {
+        return function clicker() {
+            let target = (typeof targetElement === "function") ? targetElement() : targetElement;
+            if (target && typeof target.click === "function") {
+                target.click();
+            } else {
+                console.warn('Cannot activate element by shortcut. Element:', target)
             }
         }
     }
+
+    static keyCodePred(code) {
+        return function checkIsKey(ev) {
+            return ev.key === code;
+        };
+    }
+
 }
 
 /**
@@ -1641,5 +1698,4 @@ class WtmDomObserver {
 
 const brickObserver = new WtmDomObserver();
 brickObserver.observe();
-//fixme disable New item hot key when the dialog is opened
-// WtmGlobalShortcuts.install();
+WtmShortcuts.install();
