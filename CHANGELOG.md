@@ -1,4 +1,6 @@
 # Changelog
+- **2.6.4**
+    - Add keyboard shortcut 'N' for adding new time sheet item
 - **2.6**
     - Prefer jira.com if a project exists at both com and eu domains
 - **2.5**
