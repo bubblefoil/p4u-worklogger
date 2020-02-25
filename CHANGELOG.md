@@ -1,4 +1,6 @@
 # Changelog
+- **2.6.5**
+    - Fix new time sheet item activated by any keypress
 - **2.6.4**
     - Add keyboard shortcut 'N' for adding new time sheet item
 - **2.6**

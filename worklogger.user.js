@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.6.4
+// @version      2.6.5
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -143,13 +143,13 @@ function not(pred) {
 }
 
 /**
- * Returns pred giving negated result.
+ * Returns pred giving positive result if all given preds return true.
  */
 function and(...preds) {
     return function everyPred(...args) {
-        return preds.find(p => {
+        return preds.every(p => {
             if (typeof p !== "function") {
-                throw new TypeError('All arguments of function [and] must be functions, not this thing:', p);
+                throw new TypeError('All arguments of function [and] must be functions, not this thing:' + p);
             }
             return p(...args);
         });
@@ -1512,7 +1512,7 @@ class WtmShortcuts {
 
     static keyCodePred(code) {
         return function checkIsKey(ev) {
-            return ev.key === code;
+            return ev.code === code;
         };
     }
 
