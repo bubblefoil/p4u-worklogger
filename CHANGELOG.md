@@ -1,4 +1,6 @@
 # Changelog
+- **2.7.0**
+    - Fix Ctrl (+ Shift) + Enter shortcuts
 - **2.6.5**
     - Fix new time sheet item activated by any keypress
 - **2.6.4**

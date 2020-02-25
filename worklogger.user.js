@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.6.5
+// @version      2.7.0
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -131,6 +131,37 @@ function when(pred, fn) {
             return fn(...args);
         }
     }
+}
+
+/**
+ * Returns a function that dispatches calls to one of given functions, based on the first matching predicate.
+ * Takes pairs of predicate, function (alternating), tests predicates one by one
+ * and when a predicate returns true (strict match), calls following function and returns its result.
+ * Each predicate and fn gets arguments passed to the returned dispatching function.
+ *
+ * Basically a functional if-else.
+ *
+ * @param pred {Function} Predicate
+ * @param fn {Function} Function to call if pred matches.
+ * @param more More pred/fn pairs.
+ * @return {function(...[*]=)} Dispatching function
+ */
+function condp(pred, fn, ...more) {
+    if (more.length % 2 !== 0) {
+        throw new Error('Invalid number of functions. Expected even number of functions, predicate/function pairs.')
+    }
+    const nonFn = [pred, fn, ...more].find(f => typeof f !== "function");
+    if (nonFn) {
+        throw new TypeError('Invalid argument. Expected even number of functions, predicate/function pairs, but got this: ' + nonFn);
+    }
+    return function predMatchingFn(...args) {
+        const fns = [pred, fn, ...more];
+        for (let i = 0; i < fns.length; i += 2) {
+            if (fns[i](...args)) {
+                return fns[i + 1](...args);
+            }
+        }
+    };
 }
 
 /**
@@ -479,19 +510,9 @@ class WtmDialog {
             .firstChild;
     }
 
-    static registerKeyboardShortcuts() {
+    static addKeyboardShortcutMnemonics() {
         WtmDialog.buttonOk().title = "Ctrl + Enter";
-        $(document).on("keydown", e => {
-            if (e.code === "Enter" && e.ctrlKey) {
-                WtmDialog.buttonOk().click();
-            }
-        });
         WtmDialog.buttonNextItem().title = "Ctrl + Shift + Enter";
-        $(document).on("keydown", e => {
-            if (e.code === "Enter" && e.ctrlKey && e.shiftKey) {
-                WtmDialog.buttonNextItem().click();
-            }
-        });
     }
 
     /**
@@ -736,7 +757,6 @@ class Jira4U {
                 //We do want the errors property, that's the project validation response
                 const hasNoValidationErrors = r => typeof r.errors !== 'undefined';
                 const hasProjectUsedError = result => /uses this project key/.test(result.errors.projectKey);
-                debugger
                 const foundProjects = results
                     .filter(hasNoValidationErrors)
                     .filter(hasProjectUsedError);
@@ -744,7 +764,6 @@ class Jira4U {
                 if (foundProjects.length === 1) {
                     return Promise.of(cacheAndGet(projectCode, foundProjects[0].jira));
                 } else if (foundProjects.length > 1) {
-                    debugger
                     // Prefer jira.com, because if a project exists at both domains, it was migrated from .eu to .com
                     const projectAtJiraCom = foundProjects.find(result => result.jira.lastIndexOf('.com') > 0);
                     const foundProject = projectAtJiraCom || foundProjects[0];
@@ -1275,9 +1294,9 @@ class P4uWorklogger {
     }
 
     static registerKeyboardShortcuts() {
-        WtmDialog.registerKeyboardShortcuts();
+        WtmDialog.addKeyboardShortcutMnemonics();
 
-        const timeControlTitle = 'Použijte šipky ⬆⬇ pro změnu času';
+        const timeControlTitle = `Použijte šipky ⬆⬇ pro změnu času. Stisknutím 'T' zaměříte vstupní pole času.`;
         WtmDialog.timeFrom().addEventListener('keydown', P4uWorklogger.shiftTime);
         WtmDialog.timeFrom().title = timeControlTitle;
         WtmDialog.timeTo().addEventListener('keydown', P4uWorklogger.shiftTime);
@@ -1490,24 +1509,38 @@ class WtmShortcuts {
             return;
         }
         WtmShortcuts.install.done = true;
-
         // New work item - N
         document.addEventListener("keypress",
-            when(
-                and(WtmShortcuts.keyCodePred('KeyN'),
-                    not(WtmWorktableModel.isModalDialogOpened)),
-                WtmShortcuts.clickElement(WtmWorktableModel.newItemButton)));
+            condp(
+                and(WtmShortcuts.keyCodePred('KeyN'), not(WtmWorktableModel.isModalDialogOpened))
+                , WtmShortcuts.clickElement(WtmWorktableModel.newItemButton),
+                /* TODO this requires filtering regular typing events (or events from input target elements)
+                and(WtmShortcuts.keyCodePred('KeyT'), WtmWorktableModel.isModalDialogOpened)
+                , WtmShortcuts.doWithElement(el => el.focus(), WtmDialog.timeFrom),
+                and(WtmShortcuts.keyCodePred('KeyD'), WtmWorktableModel.isModalDialogOpened)
+                , WtmShortcuts.doWithElement(el => el.focus(), WtmDialog.datePicker),*/
+                and(ev => ev.ctrlKey, ev => ev.shiftKey, WtmShortcuts.keyCodePred('Enter'), WtmWorktableModel.isModalDialogOpened)
+                , WtmShortcuts.clickElement(WtmDialog.buttonNextItem),
+                and(ev => ev.ctrlKey, WtmShortcuts.keyCodePred('Enter'), WtmWorktableModel.isModalDialogOpened)
+                , WtmShortcuts.clickElement(WtmDialog.buttonOk)));
+    }
+
+    static doWithElement(elementFn, targetElement) {
+        return function elementAction() {
+            let target = (typeof targetElement === "function") ? targetElement() : targetElement;
+            elementFn(target);
+        }
     }
 
     static clickElement(targetElement) {
-        return function clicker() {
-            let target = (typeof targetElement === "function") ? targetElement() : targetElement;
-            if (target && typeof target.click === "function") {
-                target.click();
+        const clicker = element => {
+            if (element && typeof element.click === "function") {
+                element.click();
             } else {
-                console.warn('Cannot activate element by shortcut. Element:', target)
+                console.warn('Cannot activate element by shortcut. Element:', element)
             }
-        }
+        };
+        return WtmShortcuts.doWithElement(clicker, targetElement);
     }
 
     static keyCodePred(code) {
