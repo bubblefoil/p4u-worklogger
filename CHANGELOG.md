@@ -1,4 +1,6 @@
 # Changelog
+- **2.7.2**
+    - Show jira project code when available
 - **2.7.1**
     - Show reload issue button when authorization fails
 - **2.7.0**

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.7.1
+// @version      2.7.2
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -985,7 +985,9 @@ class IssueVisual {
     static async showIssue(issue) {
         const domain = issue.self.slice(0, issue.self.indexOf(jiraRestApiPath));
         const url = await jiraBrowseIssueUrl(issue.key)(domain);
-        IssueVisual.$showInIssueSummary(IssueVisual.linkHtml(url, `${issue.key} - ${issue.fields.summary}`));
+        //Some projects use this field for a project code, like NBS or FBLI
+        const projectCode = issue.fields.customfield_13908 && `<div>Project Code: ${issue.fields.customfield_13908.value}</div>` || '';
+        IssueVisual.$showInIssueSummary(IssueVisual.linkHtml(url, `${issue.key} - ${issue.fields.summary}`) + projectCode);
         IssueVisual.trackWorkOf(issue);
     }
 
