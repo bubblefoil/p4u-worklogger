@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.7.0
+// @version      2.7.1
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -1086,7 +1086,7 @@ class IssueVisual {
      * @param {string} key JIRA issue
      * @param {InvalidResponse|InvalidProjectError|ProjectLoadingError|Error} error
      */
-    issueLoadingFailed(key, error) {
+    static issueLoadingFailed(key, error) {
         IssueVisual.resetIssue();
 
         function tryGetProjectUrl() {
@@ -1106,10 +1106,16 @@ class IssueVisual {
         if (error instanceof InvalidResponse) {
             const status = error.response.status;
             if (status === 401 || status === 403) {
+                const renderJiraLink = url => IssueVisual.elem('SPAN',
+                    [
+                        document.createTextNode('JIRA autentizace selhala. '),
+                        IssueVisual.nodeFromHtml(IssueVisual.linkHtml(url, 'Přihlaste se do JIRA')),
+                        document.createTextNode(' a '),
+                        IssueVisual.clickableSpan(P4uWorklogger.loadIssueFromDescription, 'zkuste to znovu')
+                    ]);
                 tryGetProjectUrl()
-                    .then(url =>
-                        IssueVisual.$showInIssueSummary(`JIRA autentizace selhala. ${IssueVisual.linkHtml(url, 'Přihlaste se do JIRA.')}`)
-                    )
+                    .then(renderJiraLink)
+                    .then(IssueVisual.$showInIssueSummary)
                     .catch(_ => {
                         console.error('Failed to resolve url for issue ' + key);
                         IssueVisual.$showInIssueSummary(
@@ -1119,27 +1125,49 @@ Přihlaste se do ${IssueVisual.linkHtml(jiraEuUrl, 'jira.unicorn.eu')} nebo ${Is
             } else if (status === 404) {
                 getErrorMessages(error.response)
                     .then(msg => IssueVisual.$showInIssueSummary(`<span>Nepodařilo se načíst ${key}.${msg}.</span>`))
-                    .catch(err =>
-                        error(`Failed to load issue ${key}. Response: ${err}`)
-                            .then(_ => IssueVisual.$showInIssueSummary(`<span>Nepodařilo se načíst ${key}. Chyba: 404</span>`)));
+                    .catch(err => {
+                        console.error(`Failed to load issue ${key}. Response: ${err}`);
+                        IssueVisual.$showInIssueSummary(`<span>Nepodařilo se načíst ${key}. Chyba: 404</span>`);
+                    });
             }
         } else if (error instanceof InvalidProjectError) {
             IssueVisual.$showInIssueSummary(`<span>Projekt ${error.projectKey} neexistje.</span>`);
         } else if (error instanceof ProjectLoadingError) {
             IssueVisual.$showInIssueSummary(`<span>Nepodařilo se načist projekt ${error.projectKey}.</span>`);
         } else {
-            const unknownError = () => IssueVisual.$showInIssueSummary(`<span>Něco se přihodilo. Budete muset ${IssueVisual.linkHtml(jiraEuUrl, 'vykázat do JIRA ručně.')}'</span>`);
+            const showUnknownError = () => IssueVisual.$showInIssueSummary(`<span>Něco se přihodilo. Budete muset ${IssueVisual.linkHtml(jiraEuUrl, 'vykázat do JIRA ručně.')}'</span>`);
             if (error.stack) {
-                unknownError();
+                showUnknownError();
                 throw error;
             }
-            error('Unknown error: ' + error)
-                .then(unknownError);
+            console.error('Unknown error: ' + error);
+            showUnknownError();
         }
     }
 
     static linkHtml(href, label) {
         return `<a href="${href}" target="_blank">${label}</a>`;
+    };
+
+    static elem(name, children = []) {
+        const element = document.createElement(name);
+        children.forEach(child => element.appendChild(child));
+        return element;
+    };
+
+    static nodeFromHtml(htmlContent) {
+        const element = document.createElement('div');
+        element.innerHTML = htmlContent;
+        return element.firstChild;
+    };
+
+    static clickableSpan(callback, label) {
+        const clickableSpan = document.createElement('SPAN');
+        clickableSpan.innerText = label;
+        clickableSpan.onclick = callback;
+        clickableSpan.style.color = 'blue';
+        clickableSpan.style.cursor = 'pointer';
+        return clickableSpan;
     };
 
     static $jiraIssueSummary() {
@@ -1153,7 +1181,7 @@ Přihlaste se do ${IssueVisual.linkHtml(jiraEuUrl, 'jira.unicorn.eu')} nebo ${Is
      * @return {jQuery|HTMLElement}
      */
     static $showInIssueSummary(htmlContent) {
-        const issueSummary = this.$jiraIssueSummary();
+        const issueSummary = IssueVisual.$jiraIssueSummary();
         issueSummary.empty().append(htmlContent);
         return issueSummary;
     }
@@ -1257,13 +1285,11 @@ class P4uWorklogger {
 
     constructor() {
         // Initialize the page decoration.
-        this.issueVisual = null;
         this._previousDesctiptionValue = null;
         this._previousIssue = null;
     }
 
     workLogFormShow() {
-        this.issueVisual = this.issueVisual || new IssueVisual();
         IssueVisual.init();
         this._previousDesctiptionValue = WtmDialog.descArea().value;
         this._previousIssue = Jira4U.tryParseIssue(this._previousDesctiptionValue);
@@ -1282,15 +1308,19 @@ class P4uWorklogger {
         WtmDialog.descArea().removeEventListener('input', descriptionChangeListener);
         WtmDialog.descArea().addEventListener('input', descriptionChangeListener);
         //In case of a Work log update, there may already be some work description.
-        if (WtmDialog.descArea().value) {
-            const wd = Jira4U.tryParseIssue(WtmDialog.descArea().value);
-            this.loadJiraIssue(wd);
-        }
+        P4uWorklogger.loadIssueFromDescription();
 
         const jiraLogWorkButton = IssueVisual.jiraLogWorkButton();
         jiraLogWorkButton.removeEventListener('click', P4uWorklogger.writeWorkLogToJira);
         jiraLogWorkButton.addEventListener('click', P4uWorklogger.writeWorkLogToJira);
         P4uWorklogger.registerKeyboardShortcuts();
+    }
+
+    static loadIssueFromDescription() {
+        if (WtmDialog.descArea().value) {
+            const wd = Jira4U.tryParseIssue(WtmDialog.descArea().value);
+            P4uWorklogger.loadJiraIssue(wd);
+        }
     }
 
     static registerKeyboardShortcuts() {
@@ -1459,11 +1489,11 @@ class P4uWorklogger {
         const wd = Jira4U.tryParseIssue(description);
         if (this._previousIssue.issueKey === null || this._previousIssue.issueKey !== wd.issueKey) {
             this._previousIssue = wd;
-            this.loadJiraIssue(wd);
+            P4uWorklogger.loadJiraIssue(wd);
         }
     }
 
-    loadJiraIssue(wd) {
+    static loadJiraIssue(wd) {
         IssueVisual.jiraLogWorkButton().disabled = true;
         IssueVisual.showJiraIssueWorkLogRequestProgress('idle');
         if (!wd.issueKey) {
@@ -1491,7 +1521,7 @@ class P4uWorklogger {
             .then(P4uWorklogger.fillArtefactIfNeeded)
             .catch(responseErr => {
                 console.log(`Failed to load issue ${key}. Error: ${responseErr}`);
-                this.issueVisual.issueLoadingFailed(key, responseErr);
+                IssueVisual.issueLoadingFailed(key, responseErr);
             });
     }
 }

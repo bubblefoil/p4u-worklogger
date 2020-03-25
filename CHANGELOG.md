@@ -1,4 +1,6 @@
 # Changelog
+- **2.7.1**
+    - Show reload issue button when authorization fails
 - **2.7.0**
     - Fix Ctrl (+ Shift) + Enter shortcuts
 - **2.6.5**
