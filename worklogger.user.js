@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.7.2
+// @version      2.8.0
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -814,16 +814,16 @@ class Jira4U {
             .then(Jira4U.parseResponse)
             .then(p => assoc(p, 'jira', jiraUrl))
             .then(tee(res => debug(`Validated project "${project}": ${res}`)))
-            .catch(err => Promise.of(err).then(log))
-            ;
+            .catch(err => Promise.of(err).then(log));
     }
 
     /**
+     * Fetches raw JIRA issue data.
      * @param {string} key JIRA issue key string
      * @param {?Function} onprogress Optional loading progress callback
      * @return {Promise<HttpResponse|InvalidResponse>}
      */
-    static loadIssue(key, onprogress) {
+    static fetchIssue(key, onprogress = () => undefined) {
         return Jira4U.getProjectCode(key)
             .then(Jira4U.getJiraUrlForProject)
             .then(tee(url => debug('project code url: ' + url)))
@@ -832,6 +832,21 @@ class Jira4U {
             .then(getJsonRequest)
             .then(Jira4U.setOnProgressCallback(onprogress))
             .then(Jira4U.request);
+    }
+
+    /**
+     * Returns a Promise which loads and parses JIRA issue to an object.
+     * @param {string} key JIRA issue key string
+     * @param {?Function} onprogress Optional loading progress callback
+     * @return {Promise<JiraIssue|InvalidResponse|string|InvalidProjectError|ProjectLoadingError>}
+     */
+    static loadIssue(key, onprogress = () => undefined) {
+        return Jira4U.fetchIssue(key)
+            .then(tee(_ => log(`Loading of issue ${key} completed.`)))
+            //Getting into the onload function does not actually mean the status was OK
+            .then(Jira4U.validateStatusOk)
+            .then(tee(_ => log(`Issue ${key} loaded successfully.`)))
+            .then(Jira4U.parseResponse)
     }
 
     /**
@@ -986,9 +1001,11 @@ class IssueVisual {
         const domain = issue.self.slice(0, issue.self.indexOf(jiraRestApiPath));
         const url = await jiraBrowseIssueUrl(issue.key)(domain);
         //Some projects use this field for a project code, like NBS or FBLI
-        const projectCode = issue.fields.customfield_13908 && `<div>Project Code: ${issue.fields.customfield_13908.value}</div>` || '';
-        IssueVisual.$showInIssueSummary(IssueVisual.linkHtml(url, `${issue.key} - ${issue.fields.summary}`) + projectCode);
+        const projectCode = P4uWorklogger.mapToHumanJiraIssue(issue).projectCode;
+        const projectCodeHtml = projectCode && `<div>Project Code: ${projectCode}</div>` || '';
+        IssueVisual.$showInIssueSummary(IssueVisual.linkHtml(url, `${issue.key} - ${issue.fields.summary}`) + projectCodeHtml);
         IssueVisual.trackWorkOf(issue);
+        return issue;
     }
 
     /**
@@ -1049,6 +1066,7 @@ class IssueVisual {
      *
      * @typedef JiraIssue
      * @property {string} key The key of the JIRA issue, e.g. XYZ-1234
+     * @property {string} rawJiraIssue.fields.project.key The project key of the JIRA issue, e.g. XYZ
      * @property {string} fields.summary The JIRA issue summary, i.e. the title of the ticket.
      * @property {string} self JIRA link to this issue.
      * @property {?number} fields.timetracking.originalEstimateSeconds
@@ -1057,6 +1075,10 @@ class IssueVisual {
      * @property {?number} fields.timetracking.originalEstimate
      * @property {?number} fields.timetracking.remainingEstimate
      * @property {?number} fields.timetracking.timeSpent
+     * @property {string} rawJiraIssue.fields.issuetype.name Type of the issue, e.g. "Bug"
+     * @property {?string} fields.customfield_13908 NBS Project code
+     * @property {?string} fields.customfield_10174 FBL Project code
+     * @property {?string} fields.customfield_12271 FBL System
      *
      * @param {?JiraIssue} issue
      */
@@ -1113,7 +1135,7 @@ class IssueVisual {
                         document.createTextNode('JIRA autentizace selhala. '),
                         IssueVisual.nodeFromHtml(IssueVisual.linkHtml(url, 'Přihlaste se do JIRA')),
                         document.createTextNode(' a '),
-                        IssueVisual.clickableSpan(P4uWorklogger.loadIssueFromDescription, 'zkuste to znovu')
+                        IssueVisual.clickableSpan(P4uWorklogger.loadAndShowIssueFromDescription, 'zkuste to znovu')
                     ]);
                 tryGetProjectUrl()
                     .then(renderJiraLink)
@@ -1249,7 +1271,7 @@ class WorkDescription {
 
 class FlowBasedConfiguration {
 
-    static resolveArtefact(jiraIssue) {
+    static async resolveArtefact(jiraIssue) {
         if (FlowBasedConfiguration.isFlowBasedJira(jiraIssue)) {
             if (FlowBasedConfiguration.isIdccProject(jiraIssue)) {
                 if (jiraIssue.type === "Change Request") {
@@ -1267,7 +1289,7 @@ class FlowBasedConfiguration {
                 }
             }
         }
-        return null;
+        return await WorkloggerFormMemory.remember(jiraIssue).then(form => form.subject);
     }
 
 
@@ -1310,12 +1332,19 @@ class P4uWorklogger {
         WtmDialog.descArea().removeEventListener('input', descriptionChangeListener);
         WtmDialog.descArea().addEventListener('input', descriptionChangeListener);
         //In case of a Work log update, there may already be some work description.
-        P4uWorklogger.loadIssueFromDescription();
+        P4uWorklogger.loadAndShowIssueFromDescription();
 
         const jiraLogWorkButton = IssueVisual.jiraLogWorkButton();
         jiraLogWorkButton.removeEventListener('click', P4uWorklogger.writeWorkLogToJira);
         jiraLogWorkButton.addEventListener('click', P4uWorklogger.writeWorkLogToJira);
         P4uWorklogger.registerKeyboardShortcuts();
+    }
+
+    static loadAndShowIssueFromDescription() {
+        if (WtmDialog.descArea().value) {
+            const wd = Jira4U.tryParseIssue(WtmDialog.descArea().value);
+            P4uWorklogger.loadJiraIssue(wd);
+        }
     }
 
     static loadIssueFromDescription() {
@@ -1335,11 +1364,15 @@ class P4uWorklogger {
         WtmDialog.timeTo().title = timeControlTitle;
     }
 
-    static fillArtefactIfNeeded(rawJiraIssue) {
+    /**
+     *
+     * @param rawJiraIssue {JiraIssue}
+     */
+    static async fillArtefactIfNeeded(rawJiraIssue) {
         const artefactField = WtmDialog.artifactField();
         if (!artefactField.value) {
             let jiraIssue = P4uWorklogger.mapToHumanJiraIssue(rawJiraIssue);
-            let artefact = FlowBasedConfiguration.resolveArtefact(jiraIssue);
+            let artefact = await FlowBasedConfiguration.resolveArtefact(jiraIssue);
             if (artefact) {
                 artefactField.value = artefact;
                 //Let the form notice the value update, otherwise the artifact is not submitted
@@ -1349,14 +1382,23 @@ class P4uWorklogger {
         }
     }
 
+    /**
+     * @typedef HumanJiraIssue
+     * @property projectCode {?string} Optional custom field used by some projects just for the work logs.
+     * @property system {string} FBL specific
+     * @property type {string} Issue type, like 'Bug'
+     * @property issueKeyPrefix {string} Just the project part of the issue key, typically same as jiraIssue.key
+     *
+     * @param rawJiraIssue {JiraIssue}
+     * @return {HumanJiraIssue}
+     */
     static mapToHumanJiraIssue(rawJiraIssue) {
-        let humanReadableIssue = {};
-        const fieldValue = (field) => field ? field.value : null;
-        humanReadableIssue.projectCode = fieldValue(rawJiraIssue.fields.customfield_10174);
-        humanReadableIssue.system = fieldValue(rawJiraIssue.fields.customfield_12271);
-        humanReadableIssue.type = rawJiraIssue.fields.issuetype.name;
-        humanReadableIssue.issueKeyPrefix = rawJiraIssue.fields.project.key;
-        return humanReadableIssue;
+        return {
+            projectCode: rawJiraIssue.fields.customfield_10174?.value || rawJiraIssue.fields.customfield_13908?.value,
+            system: rawJiraIssue.fields.customfield_12271?.value,
+            type: rawJiraIssue.fields.issuetype.name,
+            issueKeyPrefix: rawJiraIssue.fields.project.key,
+        };
     }
 
     static getTimeAdjustmentDirection(ev) {
@@ -1513,11 +1555,6 @@ class P4uWorklogger {
         };
 
         Jira4U.loadIssue(key, showLoadingProgress)
-            .then(tee(_ => log(`Loading of issue ${key} completed.`)))
-            //Getting into the onload function does not actually mean the status was OK
-            .then(Jira4U.validateStatusOk)
-            .then(tee(_ => log(`Issue ${key} loaded successfully.`)))
-            .then(Jira4U.parseResponse)
             .then(tee(IssueVisual.showIssue))
             .then(tee(_ => IssueVisual.jiraLogWorkButton().disabled = false))
             .then(P4uWorklogger.fillArtefactIfNeeded)
@@ -1525,6 +1562,61 @@ class P4uWorklogger {
                 console.log(`Failed to load issue ${key}. Error: ${responseErr}`);
                 IssueVisual.issueLoadingFailed(key, responseErr);
             });
+    }
+}
+
+class WorkloggerFormMemory {
+
+    /**
+     * @typedef TimesheetItem
+     * @property {string} datetimeFrom "2020-03-30T17:01:00+02:00"
+     * @property {string} datetimeTo "2020-03-30T18:01:00+02:00"
+     * @property {string} subject "ues:UNI-BT:USYE.NECS~SWA04"
+     * @property {string} category "USYE.NECS"
+     * @property {string} description "NECS-1234 Pretending to work"
+     *
+     * @param timesheetItem {TimesheetItem}
+     */
+    static memorize(timesheetItem) {
+        console.debug('Remember form data for autocomplete');
+
+        /**
+         *
+         * @param {HumanJiraIssue} jiraIssue
+         */
+        function storeFormDataForProjectCode(jiraIssue) {
+            if (jiraIssue.projectCode) {
+                console.log('Saving form data for project code ', jiraIssue.projectCode);
+                const {subject = "", category = ""} = timesheetItem;
+                GM_setValue(jiraIssue.projectCode, JSON.stringify({subject, category}));
+            }
+        }
+
+        if (timesheetItem.description && (timesheetItem.subject || timesheetItem.category)) {
+            const workDescription = Jira4U.tryParseIssue(timesheetItem.description);
+            if (workDescription.issueKey) {
+                console.debug(`Loading JIRA issue '${workDescription.issueKey}' to get project code for form data memorization`);
+                Jira4U.loadIssue(workDescription.issueKey)
+                    .then(P4uWorklogger.mapToHumanJiraIssue)
+                    .then(storeFormDataForProjectCode)
+                    .catch(error);
+            }
+        } else {
+            console.debug('No form data to memorize for autocomplete');
+        }
+    }
+
+    /**
+     *
+     * @param {HumanJiraIssue} jiraIssue
+     */
+    static remember(jiraIssue) {
+        if (jiraIssue.projectCode) {
+            console.log('Loading form data for project code ', jiraIssue.projectCode);
+            return GM_getValue(jiraIssue.projectCode, `{}`)
+                .then(JSON.parse);
+        }
+
     }
 }
 
@@ -1760,6 +1852,57 @@ class WtmDomObserver {
         this.pageReadyMutationOberver.observe(document.body, this.observeOptions);
     }
 }
+
+/**
+ * Intercepts XMLHttpRequests and invokes a registered callback.
+ * Currently supports just one callback, registering more would probably
+ * nest the XMLHttpRequest.open and XMLHttpRequest.send proxy functions.
+ */
+class RequestListener {
+
+    static onDataSent(urlFilter, callback) {
+        // Start with interception of fn XMLHttpRequest.open, which is provided request URL
+        (function (open) {
+            window.XMLHttpRequest.prototype.open = function (method, url, ...args) {
+                // Store the URL on he XMLHttpRequest.send fn because send() gets the request body right after open() is called.
+                window.XMLHttpRequest.prototype.send.lastOpenedUrl = url;
+                open.apply(this, [method, url, ...args]);
+            };
+        })(window.XMLHttpRequest.prototype.open);
+
+        // Next, intercept the XMLHttpRequest.send fn, check that the last opened URL is the one to intercept and invoke callback
+        (function (send) {
+            window.XMLHttpRequest.prototype.send = function (data) {
+                const lastOpenedUrl = window.XMLHttpRequest.prototype.send.lastOpenedUrl;
+                if (data && lastOpenedUrl && urlFilter(lastOpenedUrl)) {
+                    callback(lastOpenedUrl, data)
+                }
+                send.call(this, data);
+            };
+        })(window.XMLHttpRequest.prototype.send);
+    }
+
+    static isUrlPathName(urlEnding) {
+        return function requestEventUrlPathnameFilter(url) {
+            try {
+                return new URL(url).pathname.endsWith(urlEnding);
+            } catch (e) {
+                console.log(`failed to compare URL ending "${urlEnding} with URL ${url}`);
+                return false;
+            }
+        };
+    }
+}
+
+RequestListener.onDataSent(
+    RequestListener.isUrlPathName('/createTimesheetItem'),
+    (url, data) => {
+        console.log(data);
+        console.log(url);
+        debugger
+        WorkloggerFormMemory.memorize(data);
+    }
+);
 
 const brickObserver = new WtmDomObserver();
 brickObserver.observe();
