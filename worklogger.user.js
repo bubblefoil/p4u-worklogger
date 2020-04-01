@@ -446,32 +446,31 @@ class WtmDialog {
         return document.getElementsByTagName("textarea")[0];
     }
 
-    static datePicker() {
-        return document.getElementsByName("date")[0]
+    static _getNamedInput(elementName) {
+        return document.getElementsByName(elementName)[0]
             .lastChild
             .firstChild
-            .firstChild
+            .firstChild;
+    }
+
+    static datePicker() {
+        return WtmDialog._getNamedInput("date")
     }
 
     static timeFrom() {
-        return document.getElementsByName("timeFrom")[0]
-            .lastChild
-            .firstChild
-            .firstChild;
+        return WtmDialog._getNamedInput("timeFrom");
     }
 
     static timeTo() {
-        return document.getElementsByName("timeTo")[0]
-            .lastChild
-            .firstChild
-            .firstChild;
+        return WtmDialog._getNamedInput("timeTo");
     }
 
     static artifactField() {
-        return document.getElementsByName("subject")[0]
-            .lastChild
-            .firstChild
-            .firstChild;
+        return WtmDialog._getNamedInput("subject");
+    }
+
+    static categoryField() {
+        return WtmDialog._getNamedInput("category");
     }
 
     static dateFrom() {
@@ -1269,39 +1268,6 @@ class WorkDescription {
     }
 }
 
-class FlowBasedConfiguration {
-
-    static async resolveArtefact(jiraIssue) {
-        if (FlowBasedConfiguration.isFlowBasedJira(jiraIssue)) {
-            if (FlowBasedConfiguration.isIdccProject(jiraIssue)) {
-                if (jiraIssue.type === "Change Request") {
-                    return "UNI-BT:USYE.IDCC/CR";
-                } else {
-                    return "UNI-BT:USYE.IDCC/IDCC_MAINSCOPE";
-                }
-            } else {
-                if (jiraIssue.projectCode) {
-                    if (jiraIssue.projectCode.startsWith("UNI-BT:")) {
-                        return jiraIssue.projectCode;
-                    } else {
-                        return "UNI-BT:" + jiraIssue.projectCode;
-                    }
-                }
-            }
-        }
-        return await WorkloggerFormMemory.remember(jiraIssue).then(form => form.subject);
-    }
-
-
-    static isFlowBasedJira(jiraIssue) {
-        return jiraIssue.issueKeyPrefix === "FBLI" || jiraIssue.issueKeyPrefix === "FBCE";
-    }
-
-    static isIdccProject(jiraIssue) {
-        return jiraIssue.system === "FB IDCC";
-    }
-}
-
 /**
  * Wraps the rest of the script, mainly the steps that are executed when the document is loaded.
  */
@@ -1365,19 +1331,20 @@ class P4uWorklogger {
     }
 
     /**
-     *
+     * Tries to remember Subject and Category values previously filled for given jira issue.
      * @param rawJiraIssue {JiraIssue}
      */
-    static async fillArtefactIfNeeded(rawJiraIssue) {
+    static async fillFormFromMemorizedValues(rawJiraIssue) {
         const artefactField = WtmDialog.artifactField();
-        if (!artefactField.value) {
+        const categoryField = WtmDialog.categoryField();
+        if (!artefactField.value || !categoryField.value) {
             let jiraIssue = P4uWorklogger.mapToHumanJiraIssue(rawJiraIssue);
-            let artefact = await FlowBasedConfiguration.resolveArtefact(jiraIssue);
-            if (artefact) {
-                artefactField.value = artefact;
-                //Let the form notice the value update, otherwise the artifact is not submitted
-                artefactField.focus();
-                artefactField.blur();
+            let formValues = WorkloggerFormMemory.remember(jiraIssue);
+            if (formValues.subject && !artefactField.value) {
+                await P4uWorklogger.setInputValueWithEvent(artefactField, formValues.subject);
+            }
+            if (formValues.category && !categoryField.value) {
+                await P4uWorklogger.setInputValueWithEvent(categoryField, formValues.category);
             }
         }
     }
@@ -1557,7 +1524,7 @@ class P4uWorklogger {
         Jira4U.loadIssue(key, showLoadingProgress)
             .then(tee(IssueVisual.showIssue))
             .then(tee(_ => IssueVisual.jiraLogWorkButton().disabled = false))
-            .then(P4uWorklogger.fillArtefactIfNeeded)
+            .then(P4uWorklogger.fillFormFromMemorizedValues)
             .catch(responseErr => {
                 console.log(`Failed to load issue ${key}. Error: ${responseErr}`);
                 IssueVisual.issueLoadingFailed(key, responseErr);
@@ -1581,14 +1548,18 @@ class WorkloggerFormMemory {
         console.debug('Remember form data for autocomplete');
 
         /**
-         *
          * @param {HumanJiraIssue} jiraIssue
          */
         function storeFormDataForProjectCode(jiraIssue) {
+            const {subject = "", category = ""} = timesheetItem;
             if (jiraIssue.projectCode) {
-                console.log('Saving form data for project code ', jiraIssue.projectCode);
-                const {subject = "", category = ""} = timesheetItem;
+                console.debug('Saving form data for project code ', jiraIssue.projectCode);
                 GM_setValue(jiraIssue.projectCode, JSON.stringify({subject, category}));
+                console.debug(`Form data for project code ${jiraIssue.projectCode} saved.`);
+            } else if (jiraIssue.issueKeyPrefix) {
+                console.debug('Saving form data for project key ', jiraIssue.issueKeyPrefix);
+                GM_setValue(jiraIssue.issueKeyPrefix, JSON.stringify({subject, category}));
+                console.debug(`Form data for project key ${jiraIssue.issueKeyPrefix} saved.`);
             }
         }
 
@@ -1607,16 +1578,17 @@ class WorkloggerFormMemory {
     }
 
     /**
+     * @typedef FormValues
+     * @property {string} subject "ues:UNI-BT:USYE.NECS~SWA04"
+     * @property {string} category "USYE.NECS"
      *
      * @param {HumanJiraIssue} jiraIssue
+     * @return {FormValues}
      */
     static remember(jiraIssue) {
-        if (jiraIssue.projectCode) {
-            console.log('Loading form data for project code ', jiraIssue.projectCode);
-            return GM_getValue(jiraIssue.projectCode, `{}`)
-                .then(JSON.parse);
-        }
-
+        console.log('Loading form data for issue ', jiraIssue);
+        const value = GM_getValue(jiraIssue.projectCode) || GM_getValue(jiraIssue.issueKeyPrefix) || `{}`;
+        return JSON.parse(value);
     }
 }
 
@@ -1887,7 +1859,7 @@ class RequestListener {
             try {
                 return new URL(url).pathname.endsWith(urlEnding);
             } catch (e) {
-                console.log(`failed to compare URL ending "${urlEnding} with URL ${url}`);
+                console.warn(`failed to compare URL ending "${urlEnding} with URL ${url}`);
                 return false;
             }
         };
@@ -1897,10 +1869,7 @@ class RequestListener {
 RequestListener.onDataSent(
     RequestListener.isUrlPathName('/createTimesheetItem'),
     (url, data) => {
-        console.log(data);
-        console.log(url);
-        debugger
-        WorkloggerFormMemory.memorize(data);
+        WorkloggerFormMemory.memorize(JSON.parse(data));
     }
 );
 

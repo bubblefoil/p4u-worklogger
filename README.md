@@ -5,8 +5,9 @@ The browser user script which enhances the Working Time Management.
 
 ## Features
 - Loads and displays summary of a a JIRA issue. Type the issue key in the work description. Following text will be the JIRA work log comment.
-- Writes a work log record directly into JIRA the moment it is created in Working Time Management.
+- Writes the same work log record to JIRA as filled in Working Time Management form.
 - Adds some keyboard shortcuts & mnemonics. (See access keys usage in your OS/browser.)
+- Pre-fills Subject and Category with previously filled values for chosen JIRA project.
 - Calculates sum of working hours for a custom range of days within selected month.
 - See [wiki page](https://github.com/bubblefoil/p4u-worklogger/wiki/Features)
 
