@@ -1,4 +1,6 @@
 # Changelog
+- **2.8.0**
+    - Memorize and autofill subject & category base on jira project code
 - **2.7.2**
     - Show jira project code when available
 - **2.7.1**
