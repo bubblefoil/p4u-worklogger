@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.8.0
+// @version      2.8.1
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -1346,6 +1346,14 @@ class P4uWorklogger {
             if (formValues.category && !categoryField.value) {
                 await P4uWorklogger.setInputValueWithEvent(categoryField, formValues.category);
             }
+            window.requestAnimationFrame(() => {
+                // Setting Category value shows an autocomplete popup and steals focus.
+                // Click the first item in the whisperer and return focus to the Description
+                const catPopup = document.querySelector('div.uu5-bricks-popover-body a');
+                catPopup && catPopup.click();
+                setTimeout(() => WtmDialog.descArea().focus(), 0);
+                setTimeout(() => WtmDialog.descArea().click(), 20);
+            });
         }
     }
 
