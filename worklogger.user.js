@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.8.1
+// @version      2.8.2
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -1335,28 +1335,25 @@ class P4uWorklogger {
      * @param rawJiraIssue {JiraIssue}
      */
     static async fillFormFromMemorizedValues(rawJiraIssue) {
-        const artefactField = WtmDialog.artifactField();
+        const subjectField = WtmDialog.artifactField();
         const categoryField = WtmDialog.categoryField();
-        if (!artefactField.value || !categoryField.value) {
-            let jiraIssue = P4uWorklogger.mapToHumanJiraIssue(rawJiraIssue);
-            let formValues = WorkloggerFormMemory.remember(jiraIssue);
-            if (formValues.subject && !artefactField.value) {
-                await P4uWorklogger.setInputValueWithEvent(artefactField, formValues.subject);
-            }
-            if (formValues.category && !categoryField.value) {
-                await P4uWorklogger.setInputValueWithEvent(categoryField, formValues.category);
-            }
-            window.requestAnimationFrame(() => {
-                // Setting Category value shows an autocomplete popup and steals focus.
-                // Click the first item in the whisperer and return focus to the Description
-                const catPopup = document.querySelector('div.uu5-bricks-popover-body a');
-                catPopup && catPopup.click();
-                setTimeout(() => WtmDialog.descArea().focus(), 0);
-                setTimeout(() => WtmDialog.descArea().click(), 20);
-            });
+        let jiraIssue = P4uWorklogger.mapToHumanJiraIssue(rawJiraIssue);
+        let formValues = WorkloggerFormMemory.remember(jiraIssue);
+        if (formValues.subject) {
+            await P4uWorklogger.setInputValueWithEvent(subjectField, formValues.subject);
         }
+        if (formValues.category) {
+            await P4uWorklogger.setInputValueWithEvent(categoryField, formValues.category);
+        }
+        // Setting Category value shows an autocomplete popup and steals focus.
+        // Let the popup render, click the first item in the whisperer and return focus to the Description
+        window.requestAnimationFrame(() => {
+            const catPopup = document.querySelector('div.uu5-bricks-popover-body a');
+            catPopup && catPopup.click();
+            setTimeout(() => WtmDialog.descArea().focus(), 0);
+            setTimeout(() => WtmDialog.descArea().click(), 20);
+        });
     }
-
     /**
      * @typedef HumanJiraIssue
      * @property projectCode {?string} Optional custom field used by some projects just for the work logs.
