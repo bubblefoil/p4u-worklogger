@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.8.2
+// @version      2.9.0
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -956,8 +956,7 @@ class IssueVisual {
                   <tbody>
                     <tr>
                       <td class="workTracker wtl" id="jiraOrigEstimate" title="Původní odhad:" style="background-color: #89AFD7; padding: 0; ${transition} width: 0;"></td>
-                      <td class="workTracker wtr" id="jiraRemainEstimate" title="Zbývající odhad:" style="background-color: #ec8e00; padding: 0; ${transition} width: 0;"></td>
-                      <td class="workTracker wt" title="Původní odhad" style="background-color: #cccccc; padding: 0; ${transition} width: 100%"></td>
+                      <td class="workTracker wt" style="background-color: #eeeeee; padding: 0; ${transition} width: 100%"></td>
                     </tr>
                   </tbody>
                 </table>
@@ -966,7 +965,8 @@ class IssueVisual {
                     <tr>
                       <td class="workTracker wtl" id="jiraWorkLogged" title="Vykázáno:" style="background-color: #51a825; padding: 0; ${transition} width: 0;"></td>
                       <td class="workTracker wtn" id="jiraWorkLogging" title="Nový výkaz" style="background-color: #51A82580; padding: 0; /*${transition}*/ width: 0"></td>
-                      <td class="workTracker wtr" id="jiraWorkRemainTotal" title="Zbývá" style="background-color: #cccccc; padding: 0; /*${transition} */width: 100%"></td>
+                      <td class="workTracker wtr" id="jiraRemainEstimate" title="Zbývající odhad:" style="background-color: #ec8e00; padding: 0; ${transition} width: 0;"></td>
+                      <td class="workTracker pad" id="jiraWorkPad" title="Zbývá" style="background-color: #eeeeee; padding: 0; width: 100%"></td>
                     </tr>
                   </tbody>
                 </table>
@@ -1032,8 +1032,9 @@ class IssueVisual {
             const remain = issue.fields.timetracking.remainingEstimateSeconds || 0;
             const logged = issue.fields.timetracking.timeSpentSeconds || 0;
             const added = WtmDialog.getDurationSeconds();
-            const total = Math.max(orig + remain, logged + added);
-            const percentOfTotal = (x) => total > 0 ? x / total * 100 : 0;
+            const totalMax = Math.max(orig, logged + Math.max(added, remain));
+            const newRemain = Math.max(remain - added, 0);
+            const percentOfTotal = (x) => totalMax > 0 ? x / totalMax * 100 : 0;
             const setWidth = (id, w) => {
                 document.getElementById(id).style.width = `${Math.round(w)}%`;
             };
@@ -1042,18 +1043,18 @@ class IssueVisual {
                 e.title = e.title.split(':')[0] + ': ' + t || "0h";
                 e.alt = e.title;
             };
+            const toHours = (seconds) => (seconds / 3600).toFixed(2) + 'h';
+
             setWidth('jiraOrigEstimate', percentOfTotal(orig));
             setTitle('jiraOrigEstimate', issue.fields.timetracking.originalEstimate);
-            setWidth('jiraRemainEstimate', percentOfTotal(remain));
-            setTitle('jiraRemainEstimate', issue.fields.timetracking.remainingEstimate);
             setWidth('jiraWorkLogged', percentOfTotal(logged));
             setTitle('jiraWorkLogged', issue.fields.timetracking.timeSpent);
             setWidth('jiraWorkLogging', percentOfTotal(added));
-            setTitle('jiraWorkLogging', added / 3600 + 'h');
-            const remainTotal = 100 - percentOfTotal(logged + added);
-            setWidth('jiraWorkRemainTotal', remainTotal);
-            const remainCell = document.getElementById('jiraWorkRemainTotal');
-            remainCell.style.display = (remainTotal === 0 && percentOfTotal(added) !== 0) ? "none" : null;//Chrome renders zero width as 1px
+            setTitle('jiraWorkLogging', toHours(added));
+            setWidth('jiraRemainEstimate', percentOfTotal(newRemain));
+            setTitle('jiraRemainEstimate', toHours(newRemain));
+            const remainCell = document.getElementById('jiraRemainEstimate');
+            remainCell.style.display = (newRemain === 0) ? "none" : null;//Chrome renders zero width as 1px
         }
         else
             IssueVisual.resetWorkTracker();
@@ -1091,7 +1092,8 @@ class IssueVisual {
      */
     static resetWorkTracker() {
         IssueVisual._issue = null;
-        document.getElementById('jiraOrigEstimate').style.width = `0%`;
+        ['jiraOrigEstimate', 'jiraWorkLogged', 'jiraWorkLogging', 'jiraRemainEstimate']
+            .forEach(id => document.getElementById(id).style.width = `0%`);
     }
 
     /**
@@ -1412,7 +1414,8 @@ class P4uWorklogger {
                     input.selectionEnd = selectionEnd;
                     input.selectionDirection = selectionDirection;
                 }
-            );
+            )
+            .then(IssueVisual.updateWorkTracker);
     }
 
     /**

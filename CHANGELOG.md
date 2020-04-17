@@ -1,4 +1,6 @@
 # Changelog
+- **2.9.0**
+    - Improved jira work tracker
 - **2.8.0**
     - Memorize and autofill subject & category base on jira project code
 - **2.7.2**
