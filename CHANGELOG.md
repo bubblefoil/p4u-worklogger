@@ -1,4 +1,6 @@
 # Changelog
+- **2.10.0**
+    - Removed support for jira.unicorn.eu
 - **2.9.0**
     - Improved jira work tracker
 - **2.8.0**
@@ -51,11 +53,11 @@
 - **2.0.2**
     - Support for cs localization
 - **2.0.1**
-    - Basic support for new Working Time Management application    
+    - Basic support for new Working Time Management application
 - **1.1.3**
     - JIRA issue loading animation.
 - **1.1.2**
-    - Update IDCC project configuration. Artifact code changed.     
+    - Update IDCC project configuration. Artifact code changed.
 - **1.1.1**
     - Added original and remaining estimate bar to Progress tracker.
     - Fixed issue not loaded when updating a work log record.
@@ -65,7 +67,7 @@
 - **1.0.10**
     - Fixed artifact not submitted if the input was not focused after value update.
 - **1.0.9**
-    - Text box with description was moved under territory selection. 
+    - Text box with description was moved under territory selection.
 - **1.0.8**
     - Role and artifact are filled in based on Jira issue attributes. Mapping rules are hardcoded for FBCE projects.
 - **1.0.5**
