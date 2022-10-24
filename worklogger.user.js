@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         p4u-worklogger
 // @description  JIRA work log in UU
-// @version      2.10.0
+// @version      2.10.1
 // @namespace    https://uuos9.plus4u.net/
 // @homepage     https://github.com/bubblefoil/p4u-worklogger
 // @author       bubblefoil
@@ -13,6 +13,7 @@
 // @grant        GM_addStyle
 // @connect      jira.unicorn.com
 // @match        https://uuos9.plus4u.net/uu-specialistwtmg01-main/*
+// @match        https://uuapp.plus4u.net/uu-specialistwtm-maing01/*
 // @run-at       document-idle
 // ==/UserScript==
 
